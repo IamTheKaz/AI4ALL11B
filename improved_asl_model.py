@@ -40,8 +40,9 @@ BATCH_SIZE = 32  # Reduced batch size for larger images
 EPOCHS = 50  # More epochs for better performance
 NUM_CLASSES = 29
 
-# Use local archive directory
-ARCHIVE_DIR = r'C:\Users\Kaz\Desktop\AI4AllProject\archive'
+# Use relative archive directory (universal path)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIVE_DIR = os.path.join(SCRIPT_DIR, 'archive')
 TRAIN_DATA_DIR = os.path.join(ARCHIVE_DIR, 'asl_alphabet_train', 'asl_alphabet_train')
 TEST_DATA_DIR = os.path.join(ARCHIVE_DIR, 'asl_alphabet_test', 'asl_alphabet_test')
 
