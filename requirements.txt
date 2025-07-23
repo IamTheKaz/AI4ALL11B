@@ -1,4 +1,5 @@
-tensorflow==2.15.0
-numpy
-gtts
-streamlit
+tensorflow-cpu==2.15.0
+numpy==1.26.4
+gtts==2.5.3
+streamlit==1.39.0
+nltk==3.9.1
