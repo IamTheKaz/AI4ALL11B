@@ -10,8 +10,8 @@ nltk.download('words')
 from nltk.corpus import words
 
 # Paths
-MODEL_DIR = 'models'
-MODEL_PATH = os.path.join(MODEL_DIR, 'best_asl_model.h5')
+MODEL_DIR = '.'  # Root directory
+MODEL_PATH = 'best_asl_model.h5'  # Directly in root
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['space', 'del']
 
