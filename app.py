@@ -25,6 +25,8 @@ def speak_text(text):
         return fp.name
 
 # Load model
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['space', 'del', 'nothing']
+
 @st.cache_resource
 def load_model():
     if os.path.exists(MODEL_PATH):
