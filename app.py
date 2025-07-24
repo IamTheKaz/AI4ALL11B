@@ -114,7 +114,7 @@ def main():
     for idx, key in enumerate(hello_space_keys):
         with cols1[idx]:
             display_key = 'L' if key == 'L' else key
-            st.image(github_images[display_key], caption=display_key, width=50)
+            st.image(github_images[display_key], caption=display_key)
 
     # Second row: WORLD, centered
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -125,7 +125,7 @@ def main():
         for idx, key in enumerate(world_keys):
             with world_cols[idx]:
                 display_key = 'L' if key == 'L' else key
-                st.image(github_images[display_key], caption=display_key, width=50)
+                st.image(github_images[display_key], caption=display_key)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # File uploader
