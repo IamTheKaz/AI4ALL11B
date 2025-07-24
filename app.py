@@ -13,7 +13,7 @@ nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['space', 'del', 'nothing']
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + [ 'del', 'nothing','space']
 MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
