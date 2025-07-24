@@ -7,13 +7,15 @@ from gtts import gTTS
 import tempfile
 import nltk
 from nltk.corpus import words
+import requests
+from io import BytesIO
 
 # Setup
 nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + [ 'del', 'nothing','space']
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
@@ -82,13 +84,126 @@ def predict_image(image_file, model):
 
 def main():
     st.title("🤟 ASL Letter Predictor")
-    st.write("Upload one ASL image at a time. It will speak the predicted letter and any word or phrase formed.")
+    st.write("Upload an ASL image or click on the sample images below to predict letters and form words or the phrase 'HELLO WORLD'.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
     model = load_model()
+
+    # GitHub image URLs for HELLO WORLD sequence
+    github_images = {
+        'H': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/H_test.jpg',
+        'E': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/E_test.jpg',
+        'L': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/L_test.jpg',
+        'O': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/O_test.jpg',
+        'space': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/space_test.jpg',
+        'W': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/W_test.jpg',
+        'R': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/R_test.jpg',
+        'D': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/D_test.jpg'
+    }
+
+    # Display sample images for HELLO WORLD
+    st.subheader("Test with Sample Images for 'HELLO WORLD'")
+    st.write("Click on each image in sequence to build the phrase:")
+    cols = st.columns(10)
+    sequence_keys = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+    for idx, key in enumerate(sequence_keys[:-1]):  # Exclude 'D' for layout
+        with cols[idx]:
+            display_key = 'L' if key == 'L' else key  # Use 'L' for all L instances
+            st.image(github_images[display_key], caption=display_key, width=50)
+            if st.button(f"Predict {display_key}", key=f"btn_{key}_{idx}"):
+                response = requests.get(github_images[display_key])
+                image_file = BytesIO(response.content)
+                letter, confidence, top_3 = predict_image(image_file, model)
+
+                st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+                st.write("🔝 Top 3 Predictions:")
+                for i, (char, conf) in enumerate(top_3, 1):
+                    st.write(f"{i}. {char} — {conf:.2f}")
+
+                # Speak letter
+                speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+                audio_path = speak_text(speak_text_input)
+                st.audio(audio_path, format='audio/mp3')
+                os.remove(audio_path)
+
+                # Update sequence and check for words
+                st.session_state.sequence.append(letter)
+                current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
+                longest_word = ''
+                for j in range(len(current), 1, -1):
+                    word = current[-j:]
+                    if word in nltk_words and len(word) > len(longest_word):
+                        longest_word = word
+
+                if longest_word:
+                    st.markdown(f"🧠 Detected word: **{longest_word}**")
+                    word_audio = speak_text(longest_word)
+                    st.audio(word_audio, format='audio/mp3')
+                    os.remove(word_audio)
+
+                # Check for HELLO WORLD sequence
+                target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+                if len(st.session_state.sequence) >= len(target_sequence):
+                    recent = st.session_state.sequence[-len(target_sequence):]
+                    if all(r == t for r, t in zip(recent, target_sequence)):
+                        st.success("🎉 Phrase Detected: HELLO WORLD")
+                        phrase_audio = speak_text("Hello World")
+                        st.audio(phrase_audio, format='audio/mp3')
+                        os.remove(phrase_audio)
+                        st.session_state.sequence = []  # reset so it can re-detect
+
+    # Handle 'D' separately due to column layout
+    with cols[9]:
+        st.image(github_images['D'], caption='D', width=50)
+        if st.button("Predict D", key="btn_D"):
+            response = requests.get(github_images['D'])
+            image_file = BytesIO(response.content)
+            letter, confidence, top_3 = predict_image(image_file, model)
+
+            st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+            st.write("🔝 Top 3 Predictions:")
+            for i, (char, conf) in enumerate(top_3, 1):
+                st.write(f"{i}. {char} — {conf:.2f}")
+
+            # Speak letter
+            speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+            audio_path = speak_text(speak_text_input)
+            st.audio(audio_path, format='audio/mp3')
+            os.remove(audio_path)
+
+            # Update sequence and check for words
+            st.session_state.sequence.append(letter)
+            current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
+            longest_word = ''
+            for j in range(len(current), 1, -1):
+                word = current[-j:]
+                if word in nltk_words and len(word) > len(longest_word):
+                    longest_word = word
+
+            if longest_word:
+                st.markdown(f"🧠 Detected word: **{longest_word}**")
+                word_audio = speak_text(longest_word)
+                st.audio(word_audio, format='audio/mp3')
+                os.remove(word_audio)
+
+            # Check for HELLO WORLD sequence
+            target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+            if len(st.session_state.sequence) >= len(target_sequence):
+                recent = st.session_state.sequence[-len(target_sequence):]
+                if all(r == t for r, t in zip(recent, target_sequence)):
+                    st.success("🎉 Phrase Detected: HELLO WORLD")
+                    phrase_audio = speak_text("Hello World")
+                    st.audio(phrase_audio, format='audio/mp3')
+                    os.remove(phrase_audio)
+                    st.session_state.sequence = []  # reset so it can re-detect
+
+    # Original file uploader
+    st.subheader("Upload Your Own Image")
     uploaded_file = st.file_uploader("Upload a single ASL image", type=["jpg", "jpeg", "png"])
 
     if uploaded_file:
@@ -134,4 +249,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
