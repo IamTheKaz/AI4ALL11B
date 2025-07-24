@@ -28,7 +28,14 @@ def speak_text(text):
 @st.cache_resource
 def load_model():
     if os.path.exists(MODEL_PATH):
-        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        model = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 1)),
+            tf.keras.layers.MaxPooling2D(2, 2),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
+        ])
+        model.load_weights(MODEL_PATH)
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         return model
     else:
