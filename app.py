@@ -28,19 +28,59 @@ def speak_text(text):
 @st.cache_resource
 def load_model():
     if os.path.exists(MODEL_PATH):
-        model = tf.keras.Sequential([
-            tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 1)),
-            tf.keras.layers.MaxPooling2D(2, 2),
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 1)),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.3),
+
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.3),
+
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.4),
+
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.4),
+
+            tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.MaxPooling2D((2, 2)),
+            tf.keras.layers.Dropout(0.5),
+
             tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(1024, activation='relu'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.6),
+            tf.keras.layers.Dense(512, activation='relu'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.6),
+            tf.keras.layers.Dense(256, activation='relu'),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.5),
             tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
         ])
         model.load_weights(MODEL_PATH)
         model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         return model
     else:
-        st.error("No trained model found at {}. Please upload best_asl_model.h5 to models/.".format(MODEL_PATH))
+        st.error(f"Model file not found at {MODEL_PATH}")
         return None
+
 
 # Predict image
 def predict_image(image_file, model):
