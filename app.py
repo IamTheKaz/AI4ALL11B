@@ -5,35 +5,26 @@ import streamlit as st
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
 import tempfile
+from PIL import Image
 import nltk
 from nltk.corpus import words
 
-# Setup
+# Download NLTK corpus (once only)
 nltk.download('words')
-nltk_words = set(word.upper() for word in words.words())
+nltk_words = set(w.upper() for w in words.words())
+
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['space', 'del', 'nothing']
 MODEL_PATH = 'best_asl_model.h5'
 
-# Speak text and return audio file path
+# Audio generator
 def speak_text(text):
+    tts = gTTS(text)
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-        gTTS(text).save(fp.name)
+        tts.save(fp.name)
         return fp.name
 
-# Predict a single image
-def predict_image(image_file, model):
-    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
-    img_array = img_to_array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    predictions = model.predict(img_array)
-    class_idx = np.argmax(predictions[0])
-    letter = CLASS_NAMES[class_idx]
-    confidence = np.max(predictions[0])
-    top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
-    return letter, confidence, top_3
-
-# Load model with defined architecture
+# Load and process model
 @st.cache_resource
 def load_model():
     model = tf.keras.models.Sequential([
@@ -81,78 +72,40 @@ def load_model():
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-# Main Streamlit app
-def main():
-    st.title("ASL Letter Recognition & Spoken Feedback")
-    st.markdown("Upload ASL hand sign images to predict and speak each letter. Detect complete words and phrases like **HELLO WORLD**.")
+# Prediction
+def predict_image(image_file, model):
+    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
+    img_array = img_to_array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    predictions = model.predict(img_array)
+    class_idx = np.argmax(predictions[0])
+    letter = CLASS_NAMES[class_idx]
+    confidence = np.max(predictions[0])
+    top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
+    return letter, confidence, top_3
 
-    if 'sequence' not in st.session_state:
-        st.session_state.sequence = []
-        st.session_state.phrase = []
-        st.session_state.hello_idx = 0
-        st.session_state.phrase_detected = False
+# App
+def main():
+    st.title("🤟 ASL Letter Predictor")
+    st.write("Upload an ASL hand sign image to see and hear the predicted letter.")
 
     model = load_model()
+    uploaded_file = st.file_uploader("Upload a single ASL image", type=["png", "jpg", "jpeg"])
 
-    uploaded_files = st.file_uploader("Upload ASL image(s)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    if uploaded_file:
+        letter, confidence, top_3 = predict_image(uploaded_file, model)
 
-    if uploaded_files:
-        hello_target = list('HELLO WORLD')
+        st.markdown(f"### ✅ Prediction: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.write("🔝 Top 3 Predictions:")
+        for i, (char, conf) in enumerate(top_3, 1):
+            st.write(f"{i}. {char} — {conf:.2f}")
 
-        for image_file in uploaded_files:
-            letter, confidence, top_3 = predict_image(image_file, model)
-
-            
-            st.write(f"Letter: `{letter}` | Confidence: {confidence:.2f}")
-            st.write("🔝 Top 3 predictions:")
-            for i, (char, conf) in enumerate(top_3, 1):
-                st.write(f"{i}. {char}: {conf:.2f}")
-
-            st.session_state.sequence.append(letter)
-
-            # Speak letter
-            spoken = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-            audio_path = speak_text(spoken)
-            st.audio(audio_path, format='audio/mp3')
-            os.remove(audio_path)
-
-            # Phrase detection
-            expected = hello_target[st.session_state.hello_idx]
-            match = (expected == ' ' and letter == 'space') or (letter == expected)
-
-            if match:
-                st.session_state.phrase.append(letter)
-                st.session_state.hello_idx += 1
-            else:
-                st.session_state.phrase = []
-                st.session_state.hello_idx = 0
-                if letter == hello_target[0]:
-                    st.session_state.phrase.append(letter)
-                    st.session_state.hello_idx = 1
-
-            phrase_str = ''.join([' ' if l == 'space' else l.upper() for l in st.session_state.phrase])
-
-            if not st.session_state.phrase_detected and phrase_str.strip() == 'HELLO WORLD':
-                st.success("🎉 Phrase Detected: HELLO WORLD")
-                audio_path = speak_text("Hello World")
-                st.audio(audio_path, format='audio/mp3')
-                os.remove(audio_path)
-                st.session_state.phrase_detected = True
-                st.session_state.phrase = []
-                st.session_state.hello_idx = 0
-
-            # Word detection
-            joined = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-            longest_word = ''
-            for j in range(len(joined), 1, -1):
-                word = joined[-j:]
-                if word in nltk_words and len(word) > len(longest_word):
-                    longest_word = word
-            if longest_word:
-                st.markdown(f"🧠 Recognized word: **{longest_word}**")
-                audio_path = speak_text(longest_word)
-                st.audio(audio_path, format='audio/mp3')
-                os.remove(audio_path)
+        # Speak the prediction
+        spoken = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_path = speak_text(spoken)
+        st.audio(audio_path, format='audio/mp3')
+        os.remove(audio_path)
 
 if __name__ == '__main__':
     main()
+
