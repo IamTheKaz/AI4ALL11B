@@ -5,7 +5,6 @@ import streamlit as st
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
 import tempfile
-from PIL import Image
 import nltk
 from nltk.corpus import words
 
@@ -17,14 +16,12 @@ IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['space', 'del', 'nothing']
 MODEL_PATH = 'best_asl_model.h5'
 
-# Audio generator
 def speak_text(text):
     tts = gTTS(text)
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
         tts.save(fp.name)
         return fp.name
 
-# Load model with architecture
 @st.cache_resource
 def load_model():
     model = tf.keras.models.Sequential([
@@ -72,7 +69,6 @@ def load_model():
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-# Predict
 def predict_image(image_file, model):
     img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
     img_array = img_to_array(img) / 255.0
@@ -84,36 +80,35 @@ def predict_image(image_file, model):
     top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
     return letter, confidence, top_3
 
-# App
 def main():
-    st.title("🔤 ASL Letter Predictor with Word Detection")
-    st.write("Upload an ASL image to see and hear the predicted letter, and listen to any full word that forms from the sequence.")
+    st.title("🔤 ASL Predictor with HELLO WORLD Detection")
+    st.write("Upload one ASL image at a time. It will speak the predicted letter and any word or phrase formed.")
 
+    # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
     model = load_model()
-    uploaded_file = st.file_uploader("Upload one ASL image", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Upload a single ASL image", type=["jpg", "jpeg", "png"])
 
     if uploaded_file:
         letter, confidence, top_3 = predict_image(uploaded_file, model)
 
-        
-        st.markdown(f"### ✅ Prediction: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
         st.write("🔝 Top 3 Predictions:")
         for i, (char, conf) in enumerate(top_3, 1):
             st.write(f"{i}. {char} — {conf:.2f}")
 
-        # Speak predicted letter
-        spoken = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-        st.session_state.sequence.append(letter)
-
-        audio_path = speak_text(spoken)
+        # Speak letter
+        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_path = speak_text(speak_text_input)
         st.audio(audio_path, format='audio/mp3')
         os.remove(audio_path)
 
-        # Word detection on running sequence
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
         current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
         longest_word = ''
         for j in range(len(current), 1, -1):
             word = current[-j:]
@@ -121,12 +116,22 @@ def main():
                 longest_word = word
 
         if longest_word:
-            st.markdown(f"🧠 Recognized word: **{longest_word}**")
+            st.markdown(f"🧠 Detected word: **{longest_word}**")
             word_audio = speak_text(longest_word)
             st.audio(word_audio, format='audio/mp3')
             os.remove(word_audio)
 
+        # Check for HELLO WORLD sequence
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                phrase_audio = speak_text("Hello World")
+                st.audio(phrase_audio, format='audio/mp3')
+                os.remove(phrase_audio)
+                st.session_state.sequence = []  # reset so it can re-detect
+
 if __name__ == '__main__':
     main()
-
 
