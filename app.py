@@ -107,13 +107,15 @@ def main():
     # Display sample images for HELLO WORLD
     st.subheader("Test with Sample Images for 'HELLO WORLD'")
     st.write("Click on each image in sequence to build the phrase:")
-    cols = st.columns(10)
-    sequence_keys = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-    for idx, key in enumerate(sequence_keys[:-1]):  # Exclude 'D' for layout
-        with cols[idx]:
-            display_key = 'L' if key == 'L' else key  # Use 'L' for all L instances
+
+    # First row: HELLO space
+    cols1 = st.columns(6)
+    hello_space_keys = ['H', 'E', 'L', 'L', 'O', 'space']
+    for idx, key in enumerate(hello_space_keys):
+        with cols1[idx]:
+            display_key = 'L' if key == 'L' else key
             st.image(github_images[display_key], caption=display_key, width=50)
-            if st.button(f"Predict {display_key}", key=f"btn_{key}_{idx}"):
+            if st.button("", key=f"btn_{key}_{idx}"):
                 response = requests.get(github_images[display_key])
                 image_file = BytesIO(response.content)
                 letter, confidence, top_3 = predict_image(image_file, model)
@@ -156,51 +158,59 @@ def main():
                         os.remove(phrase_audio)
                         st.session_state.sequence = []  # reset so it can re-detect
 
-    # Handle 'D' separately due to column layout
-    with cols[9]:
-        st.image(github_images['D'], caption='D', width=50)
-        if st.button("Predict D", key="btn_D"):
-            response = requests.get(github_images['D'])
-            image_file = BytesIO(response.content)
-            letter, confidence, top_3 = predict_image(image_file, model)
+    # Second row: WORLD, centered
+    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+    cols2 = st.columns([1, 5, 1])  # Middle column wider to center WORLD
+    world_keys = ['W', 'O', 'R', 'L', 'D']
+    with cols2[1]:  # Use middle column for centering
+        world_cols = st.columns(5)
+        for idx, key in enumerate(world_keys):
+            with world_cols[idx]:
+                display_key = 'L' if key == 'L' else key
+                st.image(github_images[display_key], caption=display_key, width=50)
+                if st.button("", key=f"btn_{key}_{idx}"):
+                    response = requests.get(github_images[display_key])
+                    image_file = BytesIO(response.content)
+                    letter, confidence, top_3 = predict_image(image_file, model)
 
-            st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-            st.write("🔝 Top 3 Predictions:")
-            for i, (char, conf) in enumerate(top_3, 1):
-                st.write(f"{i}. {char} — {conf:.2f}")
+                    st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+                    st.write("🔝 Top 3 Predictions:")
+                    for i, (char, conf) in enumerate(top_3, 1):
+                        st.write(f"{i}. {char} — {conf:.2f}")
 
-            # Speak letter
-            speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-            audio_path = speak_text(speak_text_input)
-            st.audio(audio_path, format='audio/mp3')
-            os.remove(audio_path)
+                    # Speak letter
+                    speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+                    audio_path = speak_text(speak_text_input)
+                    st.audio(audio_path, format='audio/mp3')
+                    os.remove(audio_path)
 
-            # Update sequence and check for words
-            st.session_state.sequence.append(letter)
-            current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+                    # Update sequence and check for words
+                    st.session_state.sequence.append(letter)
+                    current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
 
-            longest_word = ''
-            for j in range(len(current), 1, -1):
-                word = current[-j:]
-                if word in nltk_words and len(word) > len(longest_word):
-                    longest_word = word
+                    longest_word = ''
+                    for j in range(len(current), 1, -1):
+                        word = current[-j:]
+                        if word in nltk_words and len(word) > len(longest_word):
+                            longest_word = word
 
-            if longest_word:
-                st.markdown(f"🧠 Detected word: **{longest_word}**")
-                word_audio = speak_text(longest_word)
-                st.audio(word_audio, format='audio/mp3')
-                os.remove(word_audio)
+                    if longest_word:
+                        st.markdown(f"🧠 Detected word: **{longest_word}**")
+                        word_audio = speak_text(longest_word)
+                        st.audio(word_audio, format='audio/mp3')
+                        os.remove(word_audio)
 
-            # Check for HELLO WORLD sequence
-            target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-            if len(st.session_state.sequence) >= len(target_sequence):
-                recent = st.session_state.sequence[-len(target_sequence):]
-                if all(r == t for r, t in zip(recent, target_sequence)):
-                    st.success("🎉 Phrase Detected: HELLO WORLD")
-                    phrase_audio = speak_text("Hello World")
-                    st.audio(phrase_audio, format='audio/mp3')
-                    os.remove(phrase_audio)
-                    st.session_state.sequence = []  # reset so it can re-detect
+                    # Check for HELLO WORLD sequence
+                    target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+                    if len(st.session_state.sequence) >= len(target_sequence):
+                        recent = st.session_state.sequence[-len(target_sequence):]
+                        if all(r == t for r, t in zip(recent, target_sequence)):
+                            st.success("🎉 Phrase Detected: HELLO WORLD")
+                            phrase_audio = speak_text("Hello World")
+                            st.audio(phrase_audio, format='audio/mp3')
+                            os.remove(phrase_audio)
+                            st.session_state.sequence = []  # reset so it can re-detect
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # Original file uploader
     st.subheader("Upload Your Own Image")
