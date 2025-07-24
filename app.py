@@ -103,7 +103,7 @@ def main():
             letter, confidence, top_3 = predict_image(image_file, model)
 
             st.image(image_file, width=160)
-            st.write(f"📷 **{image_file.name}** → Letter: `{letter}` | Confidence: {confidence:.2f}")
+            st.write(f"Letter: `{letter}` | Confidence: {confidence:.2f}")
             st.write("🔝 Top 3 predictions:")
             for i, (char, conf) in enumerate(top_3, 1):
                 st.write(f"{i}. {char}: {conf:.2f}")
