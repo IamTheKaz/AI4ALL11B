@@ -9,7 +9,7 @@ from PIL import Image
 import nltk
 from nltk.corpus import words
 
-# Download NLTK corpus (once only)
+# Setup
 nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
 
@@ -24,7 +24,7 @@ def speak_text(text):
         tts.save(fp.name)
         return fp.name
 
-# Load and process model
+# Load model with architecture
 @st.cache_resource
 def load_model():
     model = tf.keras.models.Sequential([
@@ -72,7 +72,7 @@ def load_model():
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-# Prediction
+# Predict
 def predict_image(image_file, model):
     img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
     img_array = img_to_array(img) / 255.0
@@ -86,26 +86,47 @@ def predict_image(image_file, model):
 
 # App
 def main():
-    st.title("🤟 ASL Letter Predictor")
-    st.write("Upload an ASL hand sign image to see and hear the predicted letter.")
+    st.title("🔤 ASL Letter Predictor with Word Detection")
+    st.write("Upload an ASL image to see and hear the predicted letter, and listen to any full word that forms from the sequence.")
+
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
 
     model = load_model()
-    uploaded_file = st.file_uploader("Upload a single ASL image", type=["png", "jpg", "jpeg"])
+    uploaded_file = st.file_uploader("Upload one ASL image", type=["jpg", "jpeg", "png"])
 
     if uploaded_file:
         letter, confidence, top_3 = predict_image(uploaded_file, model)
 
+        
         st.markdown(f"### ✅ Prediction: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
         st.write("🔝 Top 3 Predictions:")
         for i, (char, conf) in enumerate(top_3, 1):
             st.write(f"{i}. {char} — {conf:.2f}")
 
-        # Speak the prediction
+        # Speak predicted letter
         spoken = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        st.session_state.sequence.append(letter)
+
         audio_path = speak_text(spoken)
         st.audio(audio_path, format='audio/mp3')
         os.remove(audio_path)
 
+        # Word detection on running sequence
+        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+        longest_word = ''
+        for j in range(len(current), 1, -1):
+            word = current[-j:]
+            if word in nltk_words and len(word) > len(longest_word):
+                longest_word = word
+
+        if longest_word:
+            st.markdown(f"🧠 Recognized word: **{longest_word}**")
+            word_audio = speak_text(longest_word)
+            st.audio(word_audio, format='audio/mp3')
+            os.remove(word_audio)
+
 if __name__ == '__main__':
     main()
+
 
