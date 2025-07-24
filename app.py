@@ -81,7 +81,7 @@ def predict_image(image_file, model):
     return letter, confidence, top_3
 
 def main():
-    st.title("🔤 ASL Predictor with HELLO WORLD Detection")
+    st.title("🤟 ASL Letter Predictor")
     st.write("Upload one ASL image at a time. It will speak the predicted letter and any word or phrase formed.")
 
     # Initialize session state
