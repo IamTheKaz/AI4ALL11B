@@ -102,7 +102,7 @@ def main():
         for image_file in uploaded_files:
             letter, confidence, top_3 = predict_image(image_file, model)
 
-            st.image(image_file, width=160)
+            
             st.write(f"Letter: `{letter}` | Confidence: {confidence:.2f}")
             st.write("🔝 Top 3 predictions:")
             for i, (char, conf) in enumerate(top_3, 1):
