@@ -1,3 +1,4 @@
+rich==13.7.1
 streamlit==1.39.0
 tensorflow==2.12.0
 gtts==2.5.3
@@ -7,4 +8,3 @@ numpy==1.23.5
 streamlit-webrtc==0.47.7
 opencv-python==4.8.0.76
 pyav==12.3.0
-rich==13.7.1
