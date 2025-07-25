@@ -13,7 +13,7 @@ import base64
 
 # Setup
 nltk.download('words')
-nltk_words = set(w.upper() for word in words.words())
+nltk_words = set(w.upper() for w in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
@@ -34,28 +34,28 @@ def load_model():
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D((64, 3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D((64, 3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D((128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(128, (3, 3)), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.4),
         tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(256, (3, 3)), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Conv2D(512, ((3, 3)), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout((0.5)),
+        tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(1024, activation='relu'),
         tf.keras.layers.BatchNormalization(),
