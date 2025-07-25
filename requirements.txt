@@ -3,3 +3,5 @@ numpy==1.26.4
 gtts==2.5.3
 streamlit==1.39.0
 nltk==3.9.1
+streamlit-webrtc 
+opencv-python pyav
