@@ -17,14 +17,16 @@ CLASS_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
 nltk.download('words', quiet=True)
 
 def preprocess_frame(frame):
-    # Resize to match model input (e.g., 64x64, adjust if needed)
+    # Resize to match model input (e.g., 64x64)
     frame = cv2.resize(frame, (64, 64))
-    # Convert to RGB (if model expects RGB)
+    # For RGB model
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    # Normalize pixel values
+    # For grayscale model, uncomment below and comment RGB line
+    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     frame = frame / 255.0
-    # Add batch dimension
     frame = np.expand_dims(frame, axis=0)
+    # For grayscale, add channel dimension
+    # frame = np.expand_dims(frame, axis=-1)  # Shape: (1, 64, 64, 1)
     return frame
 
 def predict_letter(frame):
@@ -49,37 +51,34 @@ def main():
         frame_array = np.frombuffer(frame.getvalue(), np.uint8)
         frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
         
-        # Display the frame
-        st.image(frame, channels="BGR", caption="Captured Image")
-        
-        # Predict the letter
-        predicted_letter = predict_letter(frame)
-        st.write(f"Predicted Letter: **{predicted_letter}**")
-        
-        # Append to session state
-        st.session_state.predicted_letters.append(predicted_letter)
-        
-        # Display recent predictions (last 10 for target sequence)
-        st.write("Recent Predictions:", ", ".join(st.session_state.predicted_letters[-10:]))
-        
-        # Check for target sequence (e.g., HELLOWORLD)
-        target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
-        if len(st.session_state.predicted_letters) >= len(target_sequence):
-            recent = st.session_state.predicted_letters[-len(target_sequence):]
-            if recent == target_sequence:
-                word = "".join(recent)
-                st.write(f"Recognized Word: **{word}**")
-                try:
-                    # Stream audio to avoid file write issues
-                    audio_buffer = BytesIO()
-                    tts = gTTS(word)
-                    tts.write_to_fp(audio_buffer)
-                    audio_buffer.seek(0)
-                    st.audio(audio_buffer, format="audio/mp3")
-                    # Clear predictions after forming the target sequence
-                    st.session_state.predicted_letters = []
-                except Exception as e:
-                    st.error(f"Audio generation failed: {e}")
+        # Validate frame
+        if frame is not None and frame.size > 0:
+            st.image(frame, channels="BGR", caption="Captured Image")
+            
+            # Predict the letter
+            predicted_letter = predict_letter(frame)
+            st.write(f"Predicted Letter: **{predicted_letter}**")
+            
+            # Append to session state
+            st.session_state.predicted_letters.append(predicted_letter)
+            
+            # Display recent predictions (last 10)
+            st.write("Recent Predictions:", ", ".join(st.session_state.predicted_letters[-10:]))
+            
+            # Check for words (5+ letters)
+            if len(st.session_state.predicted_letters) >= 5:
+                word = "".join(st.session_state.predicted_letters[-5:])
+                if word.lower() in nltk.corpus.words.words():
+                    st.write(f"Recognized Word: **{word}**")
+                    try:
+                        audio_buffer = BytesIO()
+                        tts = gTTS(word)
+                        tts.write_to_fp(audio_buffer)
+                        audio_buffer.seek(0)
+                        st.audio(audio_buffer, format="audio/mp3")
+                        st.session_state.predicted_letters = []
+                    except Exception as e:
+                        st.error(f"Audio generation failed: {e}")
 
 if __name__ == "__main__":
     main()
