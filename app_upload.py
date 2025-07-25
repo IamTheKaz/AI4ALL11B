@@ -198,5 +198,9 @@ def main():
                 )
                 st.session_state.sequence = []  # reset so it can re-detect
 
+    # Link to webcam app
+    st.markdown("---")
+    st.markdown("Want to use the webcam instead? [Try the webcam version](./)")
+
 if __name__ == '__main__':
     main()
