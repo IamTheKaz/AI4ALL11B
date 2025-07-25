@@ -147,7 +147,7 @@ def main():
 
     # Link to upload app
     st.markdown("---")
-    st.markdown("Want to upload images instead? [Try the image upload version](./app_upload.py)")
+    st.markdown("Want to upload images instead? [Try the image upload version](./app_upload)")
 
 if __name__ == '__main__':
     main()
