@@ -166,7 +166,7 @@ def main():
             if word in nltk_words and len(word) > len(longest_word):
                 longest_word = word
 
-        if长沙:
+        if longest_word:
             st.markdown(f"🧠 Detected word: **{longest_word}**")
             word_audio = speak_text(longest_word)
             st.audio(word_audio, format='audio/mp3')
