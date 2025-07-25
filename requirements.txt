@@ -1,8 +1,10 @@
-tensorflow-cpu==2.15.0
-numpy==1.26.4
-gtts==2.5.3
 streamlit==1.39.0
-nltk==3.9.1
-streamlit-webrtc 
-opencv-python 
-pyav
+tensorflow==2.12.0
+gtts==2.5.3
+nltk==3.8.1
+requests==2.31.0
+numpy==1.23.5
+streamlit-webrtc==0.47.7
+opencv-python==4.8.0.76
+pyav==12.3.0
+rich==13.7.1
