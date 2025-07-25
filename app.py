@@ -9,6 +9,7 @@ import nltk
 from nltk.corpus import words
 import requests
 from io import BytesIO
+import base64
 
 # Setup
 nltk.download('words')
@@ -82,9 +83,16 @@ def predict_image(image_file, model):
     top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
     return letter, confidence, top_3
 
+def get_image_download_link(img_url, filename, text):
+    response = requests.get(img_url)
+    img_data = response.content
+    b64_string = base64.b64encode(img_data).decode()
+    href = f'<a href="data:image/jpeg;base64,{b64_string}" download="{filename}">{text}</a>'
+    return href
+
 def main():
     st.title("🤟 ASL Letter Predictor")
-    st.write("Click the link under each sample image below to predict the letter and form the phrase 'HELLO WORLD', or upload your own ASL image.")
+    st.write("Click on each sample image below to download it, then use the file uploader to predict the letter and form the phrase 'HELLO WORLD'. Alternatively, upload your own ASL image.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
@@ -104,55 +112,9 @@ def main():
         'D': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/D_test.jpg'
     }
 
-    # Handle image prediction from URL query parameter
-    query_params = st.query_params
-    if 'image_url' in query_params:
-        image_url = query_params['image_url']
-        response = requests.get(image_url)
-        image_file = BytesIO(response.content)
-        letter, confidence, top_3 = predict_image(image_file, model)
-
-        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-        st.write("🔝 Top 3 Predictions:")
-        for i, (char, conf) in enumerate(top_3, 1):
-            st.write(f"{i}. {char} — {conf:.2f}")
-
-        # Speak letter
-        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-        audio_path = speak_text(speak_text_input)
-        st.audio(audio_path, format='audio/mp3')
-        os.remove(audio_path)
-
-        # Update sequence and check for words
-        st.session_state.sequence.append(letter)
-        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-
-        longest_word = ''
-        for j in range(len(current), 1, -1):
-            word = current[-j:]
-            if word in nltk_words and len(word) > len(longest_word):
-                longest_word = word
-
-        if longest_word:
-            st.markdown(f"🧠 Detected word: **{longest_word}**")
-            word_audio = speak_text(longest_word)
-            st.audio(word_audio, format='audio/mp3')
-            os.remove(word_audio)
-
-        # Check for HELLO WORLD sequence
-        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-        if len(st.session_state.sequence) >= len(target_sequence):
-            recent = st.session_state.sequence[-len(target_sequence):]
-            if all(r == t for r, t in zip(recent, target_sequence)):
-                st.success("🎉 Phrase Detected: HELLO WORLD")
-                phrase_audio = speak_text("Hello World")
-                st.audio(phrase_audio, format='audio/mp3')
-                os.remove(phrase_audio)
-                st.session_state.sequence = []  # reset so it can re-detect
-
     # Display sample images for HELLO WORLD
     st.subheader("Sample Images for 'HELLO WORLD'")
-    st.write("Click the link under each image to predict that letter and build the phrase 'HELLO WORLD'.")
+    st.write("Click each image to download it, then upload it below to predict the letter. Follow the sequence to build 'HELLO WORLD'.")
 
     # First row: HELLO space
     cols1 = st.columns(6)
@@ -161,7 +123,7 @@ def main():
         with cols1[idx]:
             display_key = 'L' if key == 'L' else key
             st.image(github_images[display_key], caption=display_key)
-            st.markdown(f"[Predict {display_key}](?image_url={github_images[display_key]})")
+            st.markdown(get_image_download_link(github_images[display_key], f"{display_key}_test.jpg", "Download"), unsafe_allow_html=True)
 
     # Second row: WORLD, centered
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -173,7 +135,7 @@ def main():
             with world_cols[idx]:
                 display_key = 'L' if key == 'L' else key
                 st.image(github_images[display_key], caption=display_key)
-                st.markdown(f"[Predict {display_key}](?image_url={github_images[display_key]})")
+                st.markdown(get_image_download_link(github_images[display_key], f"{display_key}_test.jpg", "Download"), unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # File uploader
@@ -204,7 +166,7 @@ def main():
             if word in nltk_words and len(word) > len(longest_word):
                 longest_word = word
 
-        if longest_word:
+        if长沙:
             st.markdown(f"🧠 Detected word: **{longest_word}**")
             word_audio = speak_text(longest_word)
             st.audio(word_audio, format='audio/mp3')
