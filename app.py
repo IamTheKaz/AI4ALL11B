@@ -13,7 +13,7 @@ import base64
 
 # Setup
 nltk.download('words')
-nltk_words = set(w.upper() for w in words.words())
+nltk_words = set(w.upper() for word in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
@@ -34,28 +34,28 @@ def load_model():
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D((64, 3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D((64, 3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D((128, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(128, (3, 3)), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.4),
         tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(256, (3, 3)), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
         tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, ((3, 3)), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dropout((0.5)),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(1024, activation='relu'),
         tf.keras.layers.BatchNormalization(),
@@ -83,16 +83,16 @@ def predict_image(image_file, model):
     top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
     return letter, confidence, top_3
 
-def get_image_download_link(img_url, filename, text):
+def get_image_download_link(img_url, filename):
     response = requests.get(img_url)
     img_data = response.content
     b64_string = base64.b64encode(img_data).decode()
-    href = f'<a href="data:image/jpeg;base64,{b64_string}" download="{filename}">{text}</a>'
+    href = f'data:image/jpeg;base64,{b64_string}'
     return href
 
 def main():
     st.title("🤟 ASL Letter Predictor")
-    st.write("Click on each sample image below to download it, then use the file uploader to predict the letter and form the phrase 'HELLO WORLD'. Alternatively, upload your own ASL image.")
+    st.write("Click each sample image below to download it, then use the file uploader to predict the letter and form the phrase 'HELLO WORLD'. Alternatively, upload your own ASL image.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
@@ -122,8 +122,12 @@ def main():
     for idx, key in enumerate(hello_space_keys):
         with cols1[idx]:
             display_key = 'L' if key == 'L' else key
-            st.image(github_images[display_key], caption=display_key)
-            st.markdown(get_image_download_link(github_images[display_key], f"{display_key}_test.jpg", "Download"), unsafe_allow_html=True)
+            st.markdown(
+                f'<a href="{get_image_download_link(github_images[display_key], f"{display_key}_test.jpg")}" download="{display_key}_test.jpg">'
+                f'<img src="{github_images[display_key]}" alt="{display_key}" style="cursor:pointer;"></a>',
+                unsafe_allow_html=True
+            )
+            st.caption(display_key)
 
     # Second row: WORLD, centered
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -134,8 +138,12 @@ def main():
         for idx, key in enumerate(world_keys):
             with world_cols[idx]:
                 display_key = 'L' if key == 'L' else key
-                st.image(github_images[display_key], caption=display_key)
-                st.markdown(get_image_download_link(github_images[display_key], f"{display_key}_test.jpg", "Download"), unsafe_allow_html=True)
+                st.markdown(
+                    f'<a href="{get_image_download_link(github_images[display_key], f"{display_key}_test.jpg")}" download="{display_key}_test.jpg">'
+                    f'<img src="{github_images[display_key]}" alt="{display_key}" style="cursor:pointer;"></a>',
+                    unsafe_allow_html=True
+                )
+                st.caption(display_key)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # File uploader
