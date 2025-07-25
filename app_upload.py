@@ -211,7 +211,7 @@ def main():
 
     # Button to webcam app
     st.markdown("---")
-    if st.button("Try the webcam version"):
+    if st.button("Try the webcam version", key="webcam_button"):
         st.switch_page("app.py")
 
 if __name__ == '__main__':
