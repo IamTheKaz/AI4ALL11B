@@ -6,7 +6,6 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
 import nltk
 from nltk.corpus import words
-import requests
 from io import BytesIO
 import base64
 
@@ -84,132 +83,20 @@ def predict_image(image_file, model):
     top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
     return letter, confidence, top_3
 
-def get_image_download_link(img_url, filename):
-    response = requests.get(img_url)
-    img_data = response.content
-    b64_string = base64.b64encode(img_data).decode()
-    href = f'data:image/jpeg;base64,{b64_string}'
-    return href
-
-def process_prediction(letter, model):
-    # Update sequence and check for words
-    st.session_state.sequence.append(letter)
-    current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-
-    longest_word = ''
-    for j in range(len(current), 1, -1):
-        word = current[-j:]
-        if word in nltk_words and len(word) > len(longest_word):
-            longest_word = word
-
-    if longest_word:
-        st.markdown(f"🧠 Detected word: **{longest_word}**")
-        audio_buffer = speak_text(longest_word)
-        st.markdown(
-            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-            unsafe_allow_html=True
-        )
-
-    # Check for HELLO WORLD sequence
-    target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-    if len(st.session_state.sequence) >= len(target_sequence):
-        recent = st.session_state.sequence[-len(target_sequence):]
-        if all(r == t for r, t in zip(recent, target_sequence)):
-            st.success("🎉 Phrase Detected: HELLO WORLD")
-            audio_buffer = speak_text("Hello World")
-            st.markdown(
-                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                unsafe_allow_html=True
-            )
-            st.session_state.sequence = []  # reset so it can re-detect
-
 def main():
     st.title("🤟 ASL Letter Predictor")
-    st.write("Click each sample image below to download it, then use the file uploader to predict the letter and form the phrase 'HELLO WORLD'. Alternatively, use the webcam or upload your own ASL image.")
+    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the link at the bottom to upload images.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
-    if 'input_method' not in st.session_state:
-        st.session_state.input_method = None
 
     model = load_model()
 
-    # GitHub image URLs for HELLO WORLD sequence
-    github_images = {
-        'H': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/H_test.jpg',
-        'E': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/E_test.jpg',
-        'L': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/L_test.jpg',
-        'O': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/O_test.jpg',
-        'space': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/space_test.jpg',
-        'W': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/W_test.jpg',
-        'R': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/R_test.jpg',
-        'D': 'https://raw.githubusercontent.com/IamTheKaz/AI4ALL11B/main/D_test.jpg'
-    }
-
-    # Display sample images for HELLO WORLD
-    st.subheader("Sample Images for 'HELLO WORLD'")
-    st.write("Click each image to download it, then upload it below to predict the letter. Follow the sequence to build 'HELLO WORLD'.")
-
-    # First row: HELLO space
-    cols1 = st.columns(6)
-    hello_space_keys = ['H', 'E', 'L', 'L', 'O', 'space']
-    for idx, key in enumerate(hello_space_keys):
-        with cols1[idx]:
-            display_key = 'L' if key == 'L' else key
-            st.markdown(
-                f'<a href="{get_image_download_link(github_images[display_key], f"{display_key}_test.jpg")}" download="{display_key}_test.jpg">'
-                f'<img src="{github_images[display_key]}" alt="{display_key}" style="cursor:pointer;"></a>',
-                unsafe_allow_html=True
-            )
-            st.caption(display_key)
-
-    # Second row: WORLD, centered
-    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    cols2 = st.columns([1, 5, 1])  # Middle column wider to center WORLD
-    world_keys = ['W', 'O', 'R', 'L', 'D']
-    with cols2[1]:  # Use middle column for centering
-        world_cols = st.columns(5)
-        for idx, key in enumerate(world_keys):
-            with world_cols[idx]:
-                display_key = 'L' if key == 'L' else key
-                st.markdown(
-                    f'<a href="{get_image_download_link(github_images[display_key], f"{display_key}_test.jpg")}" download="{display_key}_test.jpg">'
-                    f'<img src="{github_images[display_key]}" alt="{display_key}" style="cursor:pointer;"></a>',
-                    unsafe_allow_html=True
-                )
-                st.caption(display_key)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # File uploader
-    st.subheader("Upload Your Image")
-    uploaded_file = st.file_uploader("Upload a single ASL image", type=["jpg", "jpeg", "png"], key="file_uploader")
-
     # Webcam input
     st.subheader("Use Your Webcam")
-    webcam_image = st.camera_input("Capture an ASL letter", key="webcam")
-
-    if uploaded_file and st.session_state.input_method != 'webcam':
-        st.session_state.input_method = 'file'
-        letter, confidence, top_3 = predict_image(uploaded_file, model)
-
-        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-        st.write("🔝 Top 3 Predictions:")
-        for i, (char, conf) in enumerate(top_3, 1):
-            st.write(f"{i}. {char} — {conf:.2f}")
-
-        # Speak letter
-        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-        audio_buffer = speak_text(speak_text_input)
-        st.markdown(
-            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-            unsafe_allow_html=True
-        )
-
-        process_prediction(letter, model)
-
-    if webcam_image and st.session_state.input_method != 'file':
-        st.session_state.input_method = 'webcam'
+    webcam_image = st.camera_input("Capture an ASL letter")
+    if webcam_image:
         # Temporarily save the webcam image in memory
         image_buffer = BytesIO(webcam_image.getvalue())
         letter, confidence, top_3 = predict_image(image_buffer, model)
@@ -227,7 +114,40 @@ def main():
             unsafe_allow_html=True
         )
 
-        process_prediction(letter, model)
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
+        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
+        longest_word = ''
+        for j in range(len(current), 1, -1):
+            word = current[-j:]
+            if word in nltk_words and len(word) > len(longest_word):
+                longest_word = word
+
+        if longest_word:
+            st.markdown(f"🧠 Detected word: **{longest_word}**")
+            audio_buffer = speak_text(longest_word)
+            st.markdown(
+                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                unsafe_allow_html=True
+            )
+
+        # Check for HELLO WORLD sequence
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                audio_buffer = speak_text("Hello World")
+                st.markdown(
+                    f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                    unsafe_allow_html=True
+                )
+                st.session_state.sequence = []  # reset so it can re-detect
+
+    # Link to upload app
+    st.markdown("---")
+    st.markdown("Want to upload images instead? [Try the image upload version](./app_upload)")
 
 if __name__ == '__main__':
     main()
