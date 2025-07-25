@@ -4,7 +4,6 @@ import tensorflow as tf
 import streamlit as st
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
-import tempfile
 import nltk
 from nltk.corpus import words
 import requests
@@ -20,10 +19,12 @@ CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
+    # Generate audio in memory
     tts = gTTS(text)
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-        tts.save(fp.name)
-        return fp.name
+    audio_buffer = BytesIO()
+    tts.write_to_fp(audio_buffer)
+    audio_buffer.seek(0)
+    return audio_buffer
 
 @st.cache_resource
 def load_model():
@@ -160,9 +161,11 @@ def main():
 
         # Speak letter
         speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-        audio_path = speak_text(speak_text_input)
-        st.audio(audio_path, format='audio/mp3')
-        os.remove(audio_path)
+        audio_buffer = speak_text(speak_text_input)
+        st.markdown(
+            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+            unsafe_allow_html=True
+        )
 
         # Update sequence and check for words
         st.session_state.sequence.append(letter)
@@ -176,9 +179,11 @@ def main():
 
         if longest_word:
             st.markdown(f"🧠 Detected word: **{longest_word}**")
-            word_audio = speak_text(longest_word)
-            st.audio(word_audio, format='audio/mp3')
-            os.remove(word_audio)
+            audio_buffer = speak_text(longest_word)
+            st.markdown(
+                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                unsafe_allow_html=True
+            )
 
         # Check for HELLO WORLD sequence
         target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
@@ -186,9 +191,11 @@ def main():
             recent = st.session_state.sequence[-len(target_sequence):]
             if all(r == t for r, t in zip(recent, target_sequence)):
                 st.success("🎉 Phrase Detected: HELLO WORLD")
-                phrase_audio = speak_text("Hello World")
-                st.audio(phrase_audio, format='audio/mp3')
-                os.remove(phrase_audio)
+                audio_buffer = speak_text("Hello World")
+                st.markdown(
+                    f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                    unsafe_allow_html=True
+                )
                 st.session_state.sequence = []  # reset so it can re-detect
 
 if __name__ == '__main__':
