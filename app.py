@@ -200,54 +200,55 @@ def main():
 
     # Webcam input
     st.subheader("Use Your Webcam")
-    if st.button("Open Webcam"):
-        webcam_image = st.camera_input("Capture an ASL letter", key="webcam")
-        if webcam_image:
-            letter, confidence, top_3 = predict_image(webcam_image, model)
+    webcam_image = st.camera_input("Capture an ASL letter")
+    if webcam_image:
+        # Temporarily save the webcam image in memory
+        image_buffer = BytesIO(webcam_image.getvalue())
+        letter, confidence, top_3 = predict_image(image_buffer, model)
 
-            st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-            st.write("🔝 Top 3 Predictions:")
-            for i, (char, conf) in enumerate(top_3, 1):
-                st.write(f"{i}. {char} — {conf:.2f}")
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.write("🔝 Top 3 Predictions:")
+        for i, (char, conf) in enumerate(top_3, 1):
+            st.write(f"{i}. {char} — {conf:.2f}")
 
-            # Speak letter
-            speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-            audio_buffer = speak_text(speak_text_input)
+        # Speak letter
+        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_buffer = speak_text(speak_text_input)
+        st.markdown(
+            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+            unsafe_allow_html=True
+        )
+
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
+        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
+        longest_word = ''
+        for j in range(len(current), 1, -1):
+            word = current[-j:]
+            if word in nltk_words and len(word) > len(longest_word):
+                longest_word = word
+
+        if longest_word:
+            st.markdown(f"🧠 Detected word: **{longest_word}**")
+            audio_buffer = speak_text(longest_word)
             st.markdown(
                 f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
                 unsafe_allow_html=True
             )
 
-            # Update sequence and check for words
-            st.session_state.sequence.append(letter)
-            current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-
-            longest_word = ''
-            for j in range(len(current), 1, -1):
-                word = current[-j:]
-                if word in nltk_words and len(word) > len(longest_word):
-                    longest_word = word
-
-            if longest_word:
-                st.markdown(f"🧠 Detected word: **{longest_word}**")
-                audio_buffer = speak_text(longest_word)
+        # Check for HELLO WORLD sequence
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                audio_buffer = speak_text("Hello World")
                 st.markdown(
                     f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
                     unsafe_allow_html=True
                 )
-
-            # Check for HELLO WORLD sequence
-            target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-            if len(st.session_state.sequence) >= len(target_sequence):
-                recent = st.session_state.sequence[-len(target_sequence):]
-                if all(r == t for r, t in zip(recent, target_sequence)):
-                    st.success("🎉 Phrase Detected: HELLO WORLD")
-                    audio_buffer = speak_text("Hello World")
-                    st.markdown(
-                        f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                        unsafe_allow_html=True
-                    )
-                    st.session_state.sequence = []  # reset so it can re-detect
+                st.session_state.sequence = []  # reset so it can re-detect
 
 if __name__ == '__main__':
     main()
