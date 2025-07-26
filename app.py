@@ -19,27 +19,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# JavaScript to prompt webcam permissions
-st.markdown(
-    """
-    <script>
-    async function requestWebcamPermission() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            stream.getTracks().forEach(track => track.stop()); // Stop stream after permission
-            document.getElementById('permission-status').innerText = 'Webcam permission granted!';
-            return true;
-        } catch (err) {
-            document.getElementById('permission-status').innerText = 'Webcam permission denied: ' + err.message;
-            return false;
-        }
-    }
-    </script>
-    <div id="permission-status"></div>
-    """,
-    unsafe_allow_html=True
-)
-
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']  # 29 classes
@@ -110,7 +89,7 @@ def preprocess(img):
     return img_array
 
 def main():
-    st.title("🤟 ASL Letter Predictor (Live Webcam)")
+    st.title("🖐 ASL Letter Predictor (Live Webcam)")
     st.markdown("Click below to begin live ASL detection from your webcam.")
 
     if 'sequence' not in st.session_state:
@@ -123,73 +102,85 @@ def main():
         st.session_state.frame_count = 0
 
     if st.button("Start Live Predictions"):
-        # Trigger JavaScript permission prompt
-        permission_script = """
-        <script>
-        requestWebcamPermission().then(permissionGranted => {
-            if (permissionGranted) {
-                window.location.reload(); // Reload to start stream
-            }
-        });
-        </script>
-        """
-        st.markdown(permission_script, unsafe_allow_html=True)
         st.session_state.start_stream = True
-    else:
+    elif st.button("Stop Live Predictions"):
         st.session_state.start_stream = False
-        st.info("Webcam feed is inactive. Click 'Start Live Predictions' to begin.")
+        st.session_state.frame_count = 0
+        st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
         model = load_model()
         try:
             image = camera_input_live()
+            if image is None:
+                raise Exception("camera_input_live returned None")
         except Exception as e:
             st.error(f"Webcam access failed: {e}")
+            st.markdown(
+                """
+                **Troubleshooting**:
+                - Since snapshot mode works, permissions are granted. The issue is with the live webcam module.
+                - Ensure `camera_input_live.py` is in the repository root and compatible with Streamlit 1.39.0.
+                - Test webcam in snapshot mode (`app_snapshot.py`) or another app.
+                - Try Chrome, Edge, or Android Chrome (not the Streamlit app).
+                - Refresh the page and try again.
+                - If issues persist, consider switching to `st.camera_input` for live mode.
+                """,
+                unsafe_allow_html=True
+            )
             st.stop()
 
-        if image is not None:
-            st.session_state.frame_count += 1
-            if st.session_state.frame_count % 5 != 0:
-                st.stop()
+        st.session_state.frame_count += 1
+        if st.session_state.frame_count % 5 != 0:
+            st.stop()
 
-            bytes_data = image.getvalue()
-            img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+        bytes_data = image.getvalue()
+        img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
 
-            if img_np is not None and img_np.size > 0:
-                processed = preprocess(img_np)
-                try:
-                    predictions = model.predict(processed, verbose=0)
-                    predicted_idx = np.argmax(predictions[0])
-                    confidence = np.max(predictions[0])
-                    letter = CLASS_NAMES[predicted_idx]
+        if img_np is not None and img_np.size > 0:
+            processed = preprocess(img_np)
+            try:
+                predictions = model.predict(processed, verbose=0)
+                predicted_idx = np.argmax(predictions[0])
+                confidence = np.max(predictions[0])
+                letter = CLASS_NAMES[predicted_idx]
 
-                    cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
+                cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
 
-                    if confidence > 0.7:
-                        repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
-                                           if st.session_state.sequence[-i] == letter)
+                if confidence > 0.7:
+                    repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
+                                       if st.session_state.sequence[-i] == letter)
 
-                        if repeat_count < 2:
-                            st.session_state.sequence.append(letter)
-                            st.session_state.last_letter = letter
-                            st.session_state.last_confidence = confidence
+                    if repeat_count < 2:
+                        st.session_state.sequence.append(letter)
+                        st.session_state.last_letter = letter
+                        st.session_state.last_confidence = confidence
 
-                            audio = speak_text(letter)
-                            st.markdown(
-                                f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
-                                unsafe_allow_html=True
-                            )
+                        audio = speak_text(letter)
+                        st.markdown(
+                            f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
+                            unsafe_allow_html=True
+                        )
 
-                    st.markdown("### 🔡 Letter Sequence")
-                    st.write(" → " + " ".join(st.session_state.sequence[-15:]))
-                except Exception as e:
-                    st.error(f"Prediction failed: {e}")
-            else:
-                st.warning("⚠️ Unable to decode webcam frame.")
+                st.markdown("### 🔡 Letter Sequence")
+                st.write(" → " + " ".join(st.session_state.sequence[-15:]))
+            except Exception as e:
+                st.error(f"Prediction failed: {e}")
         else:
-            st.warning("⚠️ No webcam input received. Ensure webcam permissions are granted.")
+            st.warning("⚠️ Unable to decode webcam frame.")
+            st.markdown(
+                """
+                **Troubleshooting**:
+                - Snapshot mode confirms webcam functionality.
+                - The live webcam module (`camera_input_live`) may be failing.
+                - Ensure `camera_input_live.py` is present and compatible.
+                - Test in Chrome or Edge, and try Android Chrome.
+                - Consider using `st.camera_input` for live mode.
+                """,
+                unsafe_allow_html=True
+            )
 
     # --- Mode Switching Section ---
     st.markdown("---")
