@@ -1,13 +1,4 @@
 import streamlit as st
-import numpy as np
-import tensorflow as tf
-import cv2
-import base64
-from tensorflow.keras.preprocessing.image import img_to_array
-from gtts import gTTS
-from io import BytesIO
-from camera_input_live import camera_input_live
-
 # Hide sidebar and set page config
 st.set_page_config(page_title="ASL Letter Predictor (Image Upload)", initial_sidebar_state="collapsed")
 st.markdown(
@@ -18,6 +9,15 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+import numpy as np
+import tensorflow as tf
+import cv2
+import base64
+from tensorflow.keras.preprocessing.image import img_to_array
+from gtts import gTTS
+from io import BytesIO
+from camera_input_live import camera_input_live
+
 
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
