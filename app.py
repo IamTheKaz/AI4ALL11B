@@ -1,35 +1,18 @@
-import os
+import streamlit as st
 import numpy as np
 import tensorflow as tf
-import streamlit as st
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from gtts import gTTS
-import nltk
-from nltk.corpus import words
-from io import BytesIO
+import cv2
 import base64
-
-# Hide sidebar and set page config
-st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"] {display: none;}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+from tensorflow.keras.preprocessing.image import img_to_array
+from gtts import gTTS
+from io import BytesIO
+from camera_input_live import camera_input_live
 
 # Setup
-nltk.download('words')
-nltk_words = set(w.upper() for w in words.words())
-
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
-MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
-    # Generate audio in memory
     tts = gTTS(text)
     audio_buffer = BytesIO()
     tts.write_to_fp(audio_buffer)
@@ -79,88 +62,89 @@ def load_model():
         tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
     ])
-    model.load_weights(MODEL_PATH)
+    model.load_weights("best_asl_model.h5")
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-def predict_image(image_file, model):
-    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
-    img_array = img_to_array(img) / 255.0
+def preprocess(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
+    img_array = img_to_array(resized) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    predictions = model.predict(img_array)
-    class_idx = np.argmax(predictions[0])
-    letter = CLASS_NAMES[class_idx]
-    confidence = np.max(predictions[0])
-    top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
-    return letter, confidence, top_3
+    return img_array
 
 def main():
-    st.title("🤟 ASL Letter Predictor")
-    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
+    st.set_page_config(page_title="Live ASL Predictor", layout="centered")
+    st.title("🖐 ASL Letter Predictor (Live Webcam)")
+    st.markdown("Click below to begin live ASL detection from your webcam.")
 
-    # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
+    if 'last_letter' not in st.session_state:
+        st.session_state.last_letter = None
+    if 'last_confidence' not in st.session_state:
+        st.session_state.last_confidence = 0.0
+    if 'frame_count' not in st.session_state:
+        st.session_state.frame_count = 0
 
-    model = load_model()
+    start_stream = st.button("Start Live Predictions")
+    if not start_stream:
+        st.info("Webcam feed is inactive. Click the button above to begin.")
+    else:
+        model = load_model()
+        image = camera_input_live()
 
-    # Webcam input
-    st.subheader("Use Your Webcam")
-    webcam_image = st.camera_input("Capture an ASL letter")
-    if webcam_image:
-        # Temporarily save the webcam image in memory
-        image_buffer = BytesIO(webcam_image.getvalue())
-        letter, confidence, top_3 = predict_image(image_buffer, model)
+        if image is not None:
+            st.session_state.frame_count += 1
+            if st.session_state.frame_count % 5 != 0:
+                st.stop()
 
-        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-        st.write("🔝 Top 3 Predictions:")
-        for i, (char, conf) in enumerate(top_3, 1):
-            st.write(f"{i}. {char} — {conf:.2f}")
+            bytes_data = image.getvalue()
+            img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
 
-        # Speak letter
-        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
-        audio_buffer = speak_text(speak_text_input)
-        st.markdown(
-            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-            unsafe_allow_html=True
-        )
+            if img_np is not None:
+                processed = preprocess(img_np)
+                predictions = model.predict(processed, verbose=0)
+                predicted_idx = np.argmax(predictions[0])
+                confidence = np.max(predictions[0])
+                letter = CLASS_NAMES[predicted_idx]
 
-        # Update sequence and check for words
-        st.session_state.sequence.append(letter)
-        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+                cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
 
-        longest_word = ''
-        for j in range(len(current), 1, -1):
-            word = current[-j:]
-            if word in nltk_words and len(word) > len(longest_word):
-                longest_word = word
+                if confidence > 0.7:
+                    repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
+                                       if st.session_state.sequence[-i] == letter)
 
-        if longest_word:
-            st.markdown(f"🗣 Detected word: **{longest_word}**")
-            audio_buffer = speak_text(longest_word)
-            st.markdown(
-                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                unsafe_allow_html=True
-            )
+                    if repeat_count < 2:
+                        st.session_state.sequence.append(letter)
+                        st.session_state.last_letter = letter
+                        st.session_state.last_confidence = confidence
 
-        # Check for HELLO WORLD sequence
-        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-        if len(st.session_state.sequence) >= len(target_sequence):
-            recent = st.session_state.sequence[-len(target_sequence):]
-            if all(r == t for r, t in zip(recent, target_sequence)):
-                st.success("🎉 Phrase Detected: HELLO WORLD")
-                audio_buffer = speak_text("Hello World")
-                st.markdown(
-                    f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                    unsafe_allow_html=True
-                )
-                st.session_state.sequence = []  # reset so it can re-detect
+                        audio = speak_text(letter)
+                        st.markdown(
+                            f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
+                            unsafe_allow_html=True
+                        )
 
-    # Button to upload app
+                st.markdown("### 🔡 Letter Sequence")
+                st.write(" → " + " ".join(st.session_state.sequence[-15:]))
+            else:
+                st.warning("⚠️ Unable to decode webcam frame.")
+        else:
+            st.warning("No webcam input received.")
+
+    # --- Mode Switching Section ---
     st.markdown("---")
-    if st.button("Try the image upload version"):
-        st.switch_page("pages/app_upload.py")
-   
+    st.markdown("#### Try Alternate Input Modes:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📷 Snapshot Version"):
+            st.switch_page("pages/app_snapshot.py")
+    with col2:
+        if st.button("🖼 Image Upload Version"):
+            st.switch_page("pages/app_upload.py")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
