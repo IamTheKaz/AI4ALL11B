@@ -154,7 +154,7 @@ def main():
         if st.button("🖼 Image Upload Version"):
             st.switch_page("pages/app_upload.py")
     with col2:
-        if st.button("📷 Live Webcam Version"):
+        if st.button("🤳 Live Webcam Version"):
             st.switch_page("app.py")
 
 if __name__ == '__main__':

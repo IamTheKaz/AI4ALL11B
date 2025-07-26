@@ -209,14 +209,17 @@ def main():
                 )
                 st.session_state.sequence = []  # reset so it can re-detect
 
-   # Buttons to switch to modes
-
-    st.markdown("---")
-    #if st.button("Try the live webcam version", key="webcam_button"):
-      #  st.switch_page("app.py")
-    st.markdown("---")
-    if st.button("Try the snapshot version"):
+ # --- Mode Switching Section ---
+st.markdown("---")
+st.markdown("#### 🧭 Try Alternate Input Modes:")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("📷 Snapshot Version"):
         st.switch_page("pages/app_snapshot.py")
+with col2:
+    if st.button("🤳 Live Webcam Version"):
+        st.switch_page("app.py")
+
     
 
 
