@@ -1,16 +1,11 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer
+from camera_input_live import camera_input_live
 
-st.title("🚀 WebRTC Live Stream Test")
+st.title("🎬 Live Webcam Feed")
 
-webrtc_streamer(
-    key="live_stream",
-    rtc_configuration={
-        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-    },
-    media_stream_constraints={
-        "video": True,
-        "audio": False
-    },
-    async_processing=True,
-)
+image = camera_input_live()
+
+if image is not None:
+    st.image(image, caption="Current Frame from Webcam")
+else:
+    st.warning("No image received. Is your webcam active?")
