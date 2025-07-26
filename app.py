@@ -123,10 +123,15 @@ def main():
         try:
             img = np.frombuffer(frame.getvalue(), np.uint8)
             img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+            if img is None or img.size == 0:
+                st.warning("Invalid frame received from webcam.")
+                return
             img_array = preprocess_frame(img)
-            letter, confidence, _ = predict_image(img_array, model)
+            letter, confidence, top_3 = predict_image(img_array, model)
 
             # Display frame with prediction
+            cv2.putText(img, f"{letter.upper()} ({confidence:.2f})", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             st.image(img, channels="BGR", caption=f"Predicted: {letter.upper()} ({confidence:.2f})")
 
             # Update sequence if confidence is high and letter changes
@@ -137,7 +142,7 @@ def main():
 
             # Display predictions
             if st.session_state.sequence:
-                st.markdown(f"### Current Sequence: `{', '.join(st.session_state.sequence[-j])`}")
+                st.markdown(f"### Current Sequence: {', '.join(st.session_state.sequence[-10:])}")
                 current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
                 
                 # Check for NLTK words
@@ -170,6 +175,7 @@ def main():
         except Exception as e:
             st.warning(f"Frame processing error: {e}")
 
+    
     # Buttons to switch to modes
     st.markdown("---")
     if st.button("Try the snapshot version"):
