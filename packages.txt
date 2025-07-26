@@ -1,2 +1,5 @@
 ffmpeg
 libopencv-dev
+libavformat-dev
+libavcodec-dev
+libavutil-dev
