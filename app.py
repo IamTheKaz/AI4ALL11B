@@ -24,20 +24,25 @@ st.markdown(
 )
 
 # Setup
-nltk.download('words')
+nltk.download('words', quiet=True)
 nltk_words = set(w.upper() for w in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
 
-# WebRTC configuration
+# Enhanced WebRTC configuration
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {
+        "iceServers": [
+            {"urls": "stun:stun.l.google.com:19302"},
+            {"urls": "stun:stun1.l.google.com:19302"},
+            {"urls": "stun:stun2.l.google.com:19302"},
+        ]
+    }
 )
 
 def speak_text(text):
-    # Generate audio in memory
     tts = gTTS(text)
     audio_buffer = BytesIO()
     tts.write_to_fp(audio_buffer)
@@ -96,18 +101,14 @@ def load_model():
     return model
 
 def preprocess_frame(frame):
-    # Convert BGR to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Resize to 32x32
     resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
-    # Normalize
     img_array = img_to_array(resized) / 255.0
-    # Add batch dimension
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
 def predict_image(img_array, model):
-    predictions = model.predict(img_array)
+    predictions = model.predict(img_array, verbose=0)
     class_idx = np.argmax(predictions[0])
     letter = CLASS_NAMES[class_idx]
     confidence = np.max(predictions[0])
@@ -119,36 +120,47 @@ class VideoProcessor:
         self.model = load_model()
         self.last_letter = None
         self.last_confidence = 0.0
+        self.frame_count = 0
         self.sequence = st.session_state.get('sequence', [])
 
     def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        img_array = preprocess_frame(img)
-        letter, confidence, top_3 = predict_image(img_array, self.model)
-        
-        # Update sequence only if confidence is high and letter changes
-        if confidence > 0.7 and letter != self.last_letter:
-            self.sequence.append(letter)
-            self.last_letter = letter
-            self.last_confidence = confidence
-            # Update session state
-            st.session_state.sequence = self.sequence
-        
-        # Draw predictions on frame
-        cv2.putText(img, f"{letter.upper()} ({confidence:.2f})", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+        self.frame_count += 1
+        if self.frame_count % 5 != 0:  # Process every 5th frame to reduce lag
+            return frame
+
+        try:
+            img = frame.to_ndarray(format="bgr24")
+            img_array = preprocess_frame(img)
+            letter, confidence, _ = predict_image(img_array, self.model)
+
+            # Update sequence only if confidence is high and letter changes
+            if confidence > 0.7 and letter != self.last_letter:
+                self.sequence.append(letter)
+                self.last_letter = letter
+                self.last_confidence = confidence
+                st.session_state.sequence = self.sequence
+
+            # Draw predictions on frame
+            cv2.putText(img, f"{letter.upper()} ({confidence:.2f})", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+        except Exception as e:
+            st.warning(f"Frame processing error: {e}")
+            return frame
 
 def main():
     st.title("🤟 ASL Letter Predictor - Live Webcam")
-    st.write("Stream live webcam feed to predict ASL letters and form the phrase 'HELLO WORLD'. Click 'Try the image upload version' to switch to snapshot mode.")
+    st.write("Stream live webcam feed to predict ASL letters and form the phrase 'HELLO WORLD'. If the feed doesn't start, check your browser's webcam permissions or try a different browser (Chrome/Firefox recommended).")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
+    # Debug WebRTC status
+    st.info("Select your webcam and click 'Start'. If the feed shows a spinning circle, check the logs or try refreshing the page.")
+
     # Webcam streamer
-    webrtc_streamer(
+    ctx = webrtc_streamer(
         key="asl-live",
         mode=WebRtcMode.SENDRECV,
         rtc_configuration=RTC_CONFIGURATION,
@@ -156,6 +168,14 @@ def main():
         video_processor_factory=VideoProcessor,
         async_processing=True
     )
+
+    # Display WebRTC status
+    if ctx.state.playing:
+        st.success("WebRTC connection established.")
+    elif ctx.state.signalling:
+        st.warning("WebRTC is connecting...")
+    else:
+        st.error("WebRTC is not connected. Ensure webcam access is allowed.")
 
     # Display predictions
     if st.session_state.sequence:
@@ -189,7 +209,7 @@ def main():
                 )
                 st.session_state.sequence = []
 
-    # Button to switch to snapshot mode
+    # Buttons to switch to modes
     st.markdown("---")
     if st.button("Try the snapshot version"):
         st.switch_page("pages/app_snapshot.py")
