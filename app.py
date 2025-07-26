@@ -42,7 +42,7 @@ st.markdown(
 
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
-CLASS_NAMES = [chr(i) for i in range(65, 91)]  # A-Z only
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']  # 29 classes
 
 def speak_text(text):
     tts = gTTS(text)
