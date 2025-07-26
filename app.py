@@ -7,6 +7,7 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
 from camera_input_live import camera_input_live
+import time
 
 # Hide sidebar and set page config
 st.set_page_config(page_title="ASL Letter Predictor (Live Webcam)", initial_sidebar_state="collapsed")
@@ -83,7 +84,7 @@ def load_model():
 
 def preprocess(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
+    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
     img_array = img_to_array(resized) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
@@ -100,6 +101,8 @@ def main():
         st.session_state.last_confidence = 0.0
     if 'frame_count' not in st.session_state:
         st.session_state.frame_count = 0
+    if 'last_frame_time' not in st.session_state:
+        st.session_state.last_frame_time = time.time()
 
     if st.button("Start Live Predictions"):
         st.session_state.start_stream = True
@@ -110,6 +113,9 @@ def main():
 
     if st.session_state.get('start_stream', False):
         model = load_model()
+        image_placeholder = st.empty()  # Use placeholder to reduce rerendering
+        status_placeholder = st.empty()  # For frame rate and status
+
         try:
             image = camera_input_live()
             if image is None:
@@ -119,20 +125,20 @@ def main():
             st.markdown(
                 """
                 **Troubleshooting**:
-                - Since snapshot mode works, permissions are granted. The issue is with the live webcam module.
-                - Ensure `camera_input_live.py` is in the repository root and compatible with Streamlit 1.39.0.
-                - Test webcam in snapshot mode (`app_snapshot.py`) or another app.
-                - Try Chrome, Edge, or Android Chrome (not the Streamlit app).
-                - Refresh the page and try again.
-                - If issues persist, consider switching to `st.camera_input` for live mode.
+                - Snapshot mode confirms webcam functionality.
+                - The live webcam module may be slow or incompatible.
+                - Ensure `camera_input_live.py` is optimized for Streamlit 1.39.0.
+                - Test in Chrome or Edge, and try Android Chrome.
+                - Consider switching to `st.camera_input` for live mode.
                 """,
                 unsafe_allow_html=True
             )
             st.stop()
 
         st.session_state.frame_count += 1
-        if st.session_state.frame_count % 5 != 0:
-            st.stop()
+        current_time = time.time()
+        frame_rate = 1 / (current_time - st.session_state.last_frame_time) if st.session_state.frame_count > 1 else 0
+        st.session_state.last_frame_time = current_time
 
         bytes_data = image.getvalue()
         img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -147,7 +153,8 @@ def main():
 
                 cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
+                image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
+                status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
 
                 if confidence > 0.7:
                     repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
@@ -174,10 +181,9 @@ def main():
                 """
                 **Troubleshooting**:
                 - Snapshot mode confirms webcam functionality.
-                - The live webcam module (`camera_input_live`) may be failing.
-                - Ensure `camera_input_live.py` is present and compatible.
+                - The live webcam module may be too slow.
+                - Optimize `camera_input_live.py` or switch to `st.camera_input`.
                 - Test in Chrome or Edge, and try Android Chrome.
-                - Consider using `st.camera_input` for live mode.
                 """,
                 unsafe_allow_html=True
             )
