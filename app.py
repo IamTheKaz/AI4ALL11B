@@ -127,20 +127,21 @@ def main():
         st.session_state.start_stream = True
         st.session_state.start_time = time.time()
         st.info("Initializing webcam, please wait a few seconds...")
+
     elif st.button("Stop Live Predictions"):
         st.session_state.start_stream = False
         st.session_state.frame_count = 0
         st.session_state.prediction_buffer.clear()
-        st.session_state.consecutive_count = 0
+        st.session_state.con HDMI_COUNT = 0
         st.session_state.current_letter = None
         st.session_state.start_time = None
         st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
-        if st.session_state.start_time is None or time.time() - st.session_state.start_time < WEBCAM_INIT_DELAY:
+        # Check if within 5-second delay
+        if st.session_state.start_time is not None and time.time() - st.session_state.start_time < WEBCAM_INIT_DELAY:
             st.warning("Waiting for webcam to initialize...")
-            time.sleep(0.5)
-            st.stop()
+            return  # Exit function to wait for delay
 
         model = load_model()
         image_placeholder = st.empty()
