@@ -9,18 +9,15 @@ from nltk.corpus import words
 from io import BytesIO
 import base64
 
-# Hide sidebar and set page config
+# --- Page Configuration ---
 st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
-st.markdown(
-    """
+st.markdown("""
     <style>
     [data-testid="stSidebar"] {display: none;}
     </style>
-    """,
-    unsafe_allow_html=True
-)
+    """, unsafe_allow_html=True)
 
-# Setup
+# --- Setup ---
 nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
 
@@ -29,7 +26,6 @@ CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
-    # Generate audio in memory
     tts = gTTS(text)
     audio_buffer = BytesIO()
     tts.write_to_fp(audio_buffer)
@@ -98,17 +94,14 @@ def main():
     st.title("🤟 ASL Letter Predictor")
     st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
 
-    # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
     model = load_model()
 
-    # Webcam input
     st.subheader("Use Your Webcam")
     webcam_image = st.camera_input("Capture an ASL letter")
     if webcam_image:
-        # Temporarily save the webcam image in memory
         image_buffer = BytesIO(webcam_image.getvalue())
         letter, confidence, top_3 = predict_image(image_buffer, model)
 
@@ -117,7 +110,6 @@ def main():
         for i, (char, conf) in enumerate(top_3, 1):
             st.write(f"{i}. {char} — {conf:.2f}")
 
-        # Speak letter
         speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
         audio_buffer = speak_text(speak_text_input)
         st.markdown(
@@ -125,7 +117,6 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Update sequence and check for words
         st.session_state.sequence.append(letter)
         current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
 
@@ -143,7 +134,6 @@ def main():
                 unsafe_allow_html=True
             )
 
-        # Check for HELLO WORLD sequence
         target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
         if len(st.session_state.sequence) >= len(target_sequence):
             recent = st.session_state.sequence[-len(target_sequence):]
@@ -154,15 +144,18 @@ def main():
                     f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
                     unsafe_allow_html=True
                 )
-                st.session_state.sequence = []  # reset so it can re-detect
+                st.session_state.sequence = []
 
-    # Button to upload app
+    # --- Mode Switching Section ---
     st.markdown("---")
-    if st.button("Try the image upload version"):
-        st.switch_page("pages/app_upload.py")
-    if st.button("Try the live webcam version", key="webcam_button"):
-        st.switch_page("app.py")
-
+    st.markdown("#### 🧭 Try Alternate Input Modes:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🖼 Image Upload Version"):
+            st.switch_page("pages/app_upload.py")
+    with col2:
+        if st.button("📷 Live Webcam Version"):
+            st.switch_page("app.py")
 
 if __name__ == '__main__':
     main()
