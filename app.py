@@ -24,10 +24,10 @@ st.markdown(
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']  # 29 classes
-TARGET_FPS = 3  # Aim for 3 FPS
-STABLE_FRAME_COUNT = 3  # Frames for stable sign detection
+TARGET_FPS = 3
+STABLE_FRAME_COUNT = 3
 CONFIDENCE_THRESHOLD = 0.7
-MAX_CONSECUTIVE = 2  # Max consecutive same-letter additions
+MAX_CONSECUTIVE = 2
 
 def speak_text(text):
     tts = gTTS(text)
@@ -141,18 +141,18 @@ def main():
         try:
             image = camera_input_live()
             if image is None:
-                raise Exception("camera_input_live returned None")
+                raise Exception("No webcam input received")
         except Exception as e:
             st.error(f"Webcam access failed: {e}")
             st.markdown(
                 """
                 **Troubleshooting**:
-                - Snapshot mode (`app_snapshot.py`) confirms webcam permissions and functionality.
-                - The live webcam module (`camera_input_live.py`) may be unstable or incompatible with Streamlit 1.39.0.
-                - Ensure `camera_input_live.py` is in the repository root and uses modern WebRTC APIs.
-                - Test in Chrome (`chrome://settings/content/camera`) or Edge (`edge://settings/content/camera`).
-                - On Android, check Settings > Apps > Streamlit > Permissions > Camera.
-                - Consider switching to `st.camera_input` for live mode.
+                - Snapshot mode (`app_snapshot.py`) confirms webcam permissions.
+                - Ensure `camera_input_live.py` is in the repository root and compatible with Streamlit 1.39.0.
+                - Check Chrome (`chrome://settings/content/camera`) or Edge (`edge://settings/content/camera`).
+                - On Android, verify Settings > Apps > Streamlit > Permissions > Camera.
+                - Test webcam in another app (e.g., Zoom).
+                - Ensure no other app is using the webcam.
                 - Refresh the page and try again.
                 """,
                 unsafe_allow_html=True
@@ -217,10 +217,9 @@ def main():
                 """
                 **Troubleshooting**:
                 - Snapshot mode confirms webcam functionality.
-                - The live webcam module may be failing.
-                - Ensure `camera_input_live.py` is present and compatible.
+                - Ensure `camera_input_live.py` is compatible.
                 - Test in Chrome or Edge, and try Android Chrome.
-                - Consider switching to `st.camera_input`.
+                - Refresh the page.
                 """,
                 unsafe_allow_html=True
             )
