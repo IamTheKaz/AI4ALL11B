@@ -6,5 +6,4 @@ nltk==3.8.1
 requests==2.31.0
 numpy==1.23.5
 opencv-python==4.8.0.76
-streamlit-webrtc==0.47.7
-av==12.3.0
+streamlit-camera-input-live==0.2.0
