@@ -192,7 +192,7 @@ def main():
     # Button to switch to snapshot mode
     st.markdown("---")
     if st.button("Try the snapshot version"):
-        st.switch_page("pages/snapshot_app.py")
+        st.switch_page("pages/app_snapshot.py")
     if st.button("Try the image upload version"):
         st.switch_page("pages/app_upload.py")
 
