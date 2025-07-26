@@ -7,8 +7,8 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
 from camera_input_live import camera_input_live
-import time
 from collections import deque
+import time
 
 # Hide sidebar and set page config
 st.set_page_config(page_title="ASL Letter Predictor (Live Webcam)", initial_sidebar_state="collapsed")
@@ -133,7 +133,6 @@ def main():
         st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
-        frame_start_time = time.time()
         model = load_model()
         image_placeholder = st.empty()
         status_placeholder = st.empty()
@@ -141,7 +140,7 @@ def main():
         try:
             image = camera_input_live()
             if image is None:
-                raise Exception("No webcam input received")
+                raise Exception("camera_input_live returned None")
         except Exception as e:
             st.error(f"Webcam access failed: {e}")
             st.markdown(
@@ -153,7 +152,7 @@ def main():
                 - On Android, verify Settings > Apps > Streamlit > Permissions > Camera.
                 - Test webcam in another app (e.g., Zoom).
                 - Ensure no other app is using the webcam.
-                - Refresh the page and try again.
+                - Clear browser cache and refresh the page.
                 """,
                 unsafe_allow_html=True
             )
@@ -161,6 +160,7 @@ def main():
             st.stop()
 
         st.session_state.frame_count += 1
+        frame_start_time = time.time()
         current_time = time.time()
         frame_rate = 1 / (current_time - st.session_state.last_frame_time) if st.session_state.frame_count > 1 else 0
         st.session_state.last_frame_time = current_time
@@ -171,46 +171,49 @@ def main():
         if img_np is not None and img_np.size > 0:
             image_placeholder.image(img_np, channels="BGR", caption="Live Webcam Feed")
 
-            if st.session_state.frame_count % 3 == 0:
-                processed = preprocess(img_np)
-                try:
-                    predictions = model.predict(processed, verbose=0)
-                    predicted_idx = np.argmax(predictions[0])
-                    confidence = np.max(predictions[0])
-                    letter = CLASS_NAMES[predicted_idx]
+            processed = preprocess(img_np)
+            try:
+                predictions = model.predict(processed, verbose=0)
+                predicted_idx = np.argmax(predictions[0])
+                confidence = np.max(predictions[0])
+                letter = CLASS_NAMES[predicted_idx]
 
-                    st.session_state.prediction_buffer.append({'letter': letter, 'confidence': confidence})
+                st.session_state.prediction_buffer.append({'letter': letter, 'confidence': confidence})
 
-                    if is_stable_sign(st.session_state.prediction_buffer):
-                        stable_letter = st.session_state.prediction_buffer[0]['letter']
-                        stable_confidence = st.session_state.prediction_buffer[0]['confidence']
+                if is_stable_sign(st.session_state.prediction_buffer):
+                    stable_letter = st.session_state.prediction_buffer[0]['letter']
+                    stable_confidence = st.session_state.prediction_buffer[0]['confidence']
 
-                        if stable_letter == st.session_state.current_letter:
-                            st.session_state.consecutive_count += 1
-                        else:
-                            st.session_state.consecutive_count = 1
-                            st.session_state.current_letter = stable_letter
+                    if stable_letter == st.session_state.current_letter:
+                        st.session_state.consecutive_count += 1
+                    else:
+                        st.session_state.consecutive_count = 1
+                        st.session_state.current_letter = stable_letter
 
-                        if st.session_state.consecutive_count <= MAX_CONSECUTIVE and stable_confidence > CONFIDENCE_THRESHOLD:
-                            st.session_state.sequence.append(stable_letter)
-                            st.session_state.last_letter = stable_letter
-                            st.session_state.last_confidence = stable_confidence
+                    if st.session_state.consecutive_count <= MAX_CONSECUTIVE and stable_confidence > CONFIDENCE_THRESHOLD:
+                        st.session_state.sequence.append(stable_letter)
+                        st.session_state.last_letter = stable_letter
+                        st.session_state.last_confidence = stable_confidence
 
-                            cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                            image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
-                            status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
+                        cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
+                        status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
 
-                            audio = speak_text(stable_letter)
-                            st.markdown(
-                                f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
-                                unsafe_allow_html=True
-                            )
+                        audio = speak_text(stable_letter)
+                        st.markdown(
+                            f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
+                            unsafe_allow_html=True
+                        )
 
-                    st.markdown("### 🔡 Letter Sequence")
-                    st.write(" → " + " ".join(st.session_state.sequence[-15:]))
-                except Exception as e:
-                    st.error(f"Prediction failed: {e}")
+                st.markdown("### 🔡 Letter Sequence")
+                st.write(" → " + " ".join(st.session_state.sequence[-15:]))
+            except Exception as e:
+                st.error(f"Prediction failed: {e}")
+
+            elapsed_time = time.time() - frame_start_time
+            sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
+            time.sleep(sleep_time)
         else:
             st.warning("⚠️ Unable to decode webcam frame.")
             st.markdown(
@@ -219,14 +222,10 @@ def main():
                 - Snapshot mode confirms webcam functionality.
                 - Ensure `camera_input_live.py` is compatible.
                 - Test in Chrome or Edge, and try Android Chrome.
-                - Refresh the page.
+                - Clear browser cache and refresh the page.
                 """,
                 unsafe_allow_html=True
             )
-
-        elapsed_time = time.time() - frame_start_time
-        sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
-        time.sleep(sleep_time)
 
     # --- Mode Switching Section ---
     st.markdown("---")
