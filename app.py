@@ -126,7 +126,6 @@ def main():
     if st.button("Start Live Predictions"):
         st.session_state.start_stream = True
         st.session_state.start_time = time.time()
-        st.session_state.start_streaming = True
         st.info("Initializing webcam, please wait a few seconds...")
     elif st.button("Stop Live Predictions"):
         st.session_state.start_stream = False
@@ -138,13 +137,15 @@ def main():
         st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
-        if st.session_state.start_time is None or time.time() - st.session_state.start_time < WEBCAM_INITIATIAL_DELAY:
+        if st.session_state.start_time is None or time.time() - st.session_state.start_time < WEBCAM_INIT_DELAY:
             st.warning("Waiting for webcam to initialize...")
             time.sleep(0.5)
-            return None
+            st.stop()
 
         model = load_model()
         image_placeholder = st.empty()
+        status_placeholder = st.empty()
+
         try:
             image = camera_input_live()
             if image is None:
@@ -204,6 +205,7 @@ def main():
                             cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                             image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
+                            status_placeholder.write(f"Frame Rate: {1 / (time.time() - frame_start_time):.2f} FPS | Frame Count: {st.session_state.frame_count}")
 
                             audio = speak_text(stable_letter)
                             st.markdown(
@@ -215,22 +217,22 @@ def main():
                     st.write(" → " + " ".join(st.session_state.sequence[-15:]))
                 except Exception as e:
                     st.error(f"Prediction failed: {e}")
-            else:
-                st.warning("⚠️ Unable to decode webcam frame.")
-                st.markdown(
-                    """
-                    **Troubleshooting**:
-                    - Snapshot mode confirms webcam functionality.
-                    - Ensure `camera_input_live.py` is compatible.
-                    - Test in Chrome or Edge, and try Android Chrome.
-                    - Refresh the page.
-                    """,
-                    unsafe_allow_html=True
-                )
+        else:
+            st.warning("⚠️ Unable to decode webcam frame.")
+            st.markdown(
+                """
+                **Troubleshooting**:
+                - Snapshot mode confirms webcam functionality.
+                - Ensure `camera_input_live.py` is compatible.
+                - Test in Chrome or Edge, and try Android Chrome.
+                - Refresh the page.
+                """,
+                unsafe_allow_html=True
+            )
 
-            elapsed_time = time.time() - frame_start_time
-            sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
-            time.sleep(sleep_time)
+        elapsed_time = time.time() - frame_start_time
+        sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
+        time.sleep(sleep_time)
 
     # --- Mode Switching Section ---
     st.markdown("---")
