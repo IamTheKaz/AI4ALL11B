@@ -216,7 +216,7 @@ def main():
       #  st.switch_page("app.py")
     st.markdown("---")
     if st.button("Try the snapshot version"):
-        st.switch_page("app.py")
+        st.switch_page("app_snapshot.py")
     
 
 
