@@ -7,8 +7,8 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
 from camera_input_live import camera_input_live
-from collections import deque
 import time
+from collections import deque
 
 # Hide sidebar and set page config
 st.set_page_config(page_title="ASL Letter Predictor (Live Webcam)", initial_sidebar_state="collapsed")
@@ -28,7 +28,6 @@ TARGET_FPS = 3
 STABLE_FRAME_COUNT = 3
 CONFIDENCE_THRESHOLD = 0.7
 MAX_CONSECUTIVE = 2
-WEBCAM_INIT_DELAY = 5  # seconds
 
 def speak_text(text):
     tts = gTTS(text)
@@ -103,7 +102,7 @@ def is_stable_sign(prediction_buffer):
     return all(letter == letters[0] for letter in letters) and all(conf > CONFIDENCE_THRESHOLD for conf in confidences)
 
 def main():
-    st.title("🖐 ASL Letter Predictor (Live Webcam)")
+    st.title("🤟 ASL Letter Predictor (Live Webcam)")
     st.markdown("Click below to begin live ASL detection from your webcam.")
 
     if 'sequence' not in st.session_state:
@@ -114,8 +113,8 @@ def main():
         st.session_state.last_confidence = 0.0
     if 'frame_count' not in st.session_state:
         st.session_state.frame_count = 0
-    if 'start_time' not in st.session_state:
-        st.session_state.start_time = None
+    if 'last_frame_time' not in st.session_state:
+        st.session_state.last_frame_time = time.time()
     if 'prediction_buffer' not in st.session_state:
         st.session_state.prediction_buffer = deque(maxlen=STABLE_FRAME_COUNT)
     if 'consecutive_count' not in st.session_state:
@@ -125,24 +124,16 @@ def main():
 
     if st.button("Start Live Predictions"):
         st.session_state.start_stream = True
-        st.session_state.start_time = time.time()
-        st.info("Initializing webcam, please wait a few seconds...")
-
     elif st.button("Stop Live Predictions"):
         st.session_state.start_stream = False
         st.session_state.frame_count = 0
         st.session_state.prediction_buffer.clear()
-        st.session_state.con HDMI_COUNT = 0
+        st.session_state.consecutive_count = 0
         st.session_state.current_letter = None
-        st.session_state.start_time = None
         st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
-        # Check if within 5-second delay
-        if st.session_state.start_time is not None and time.time() - st.session_state.start_time < WEBCAM_INIT_DELAY:
-            st.warning("Waiting for webcam to initialize...")
-            return  # Exit function to wait for delay
-
+        frame_start_time = time.time()
         model = load_model()
         image_placeholder = st.empty()
         status_placeholder = st.empty()
@@ -170,7 +161,9 @@ def main():
             st.stop()
 
         st.session_state.frame_count += 1
-        frame_start_time = time.time()
+        current_time = time.time()
+        frame_rate = 1 / (current_time - st.session_state.last_frame_time) if st.session_state.frame_count > 1 else 0
+        st.session_state.last_frame_time = current_time
 
         bytes_data = image.getvalue()
         img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -206,7 +199,7 @@ def main():
                             cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                             image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
-                            status_placeholder.write(f"Frame Rate: {1 / (time.time() - frame_start_time):.2f} FPS | Frame Count: {st.session_state.frame_count}")
+                            status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
 
                             audio = speak_text(stable_letter)
                             st.markdown(
