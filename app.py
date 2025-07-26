@@ -8,6 +8,17 @@ from gtts import gTTS
 from io import BytesIO
 from camera_input_live import camera_input_live
 
+# Hide sidebar and set page config
+st.set_page_config(page_title="ASL Letter Predictor (Image Upload)", initial_sidebar_state="collapsed")
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
