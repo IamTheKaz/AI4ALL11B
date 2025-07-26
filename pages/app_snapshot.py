@@ -1,3 +1,14 @@
+# Hide sidebar and set page config
+st.set_page_config(page_title="ASL Letter Predictor (Image Upload)", initial_sidebar_state="collapsed")
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 import os
 import numpy as np
 import tensorflow as tf
@@ -9,13 +20,7 @@ from nltk.corpus import words
 from io import BytesIO
 import base64
 
-# --- Page Configuration ---
-st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
-st.markdown("""
-    <style>
-    [data-testid="stSidebar"] {display: none;}
-    </style>
-    """, unsafe_allow_html=True)
+
 
 # --- Setup ---
 nltk.download('words')
