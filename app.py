@@ -165,17 +165,7 @@ def main():
                     recent = st.session_state.sequence[-len(target_sequence):]
                     if all(r == t for r, t in zip(recent, target_sequence)):
                         st.success("🎉 Phrase Detected: HELLO WORLD")
-                        audio_buffer = speak_text("Hello World")
-                        st.markdown(
-                            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                            unsafe_allow_html=True
-                        )
-                        st.session_state.sequence = []
 
-        except Exception as e:
-            st.warning(f"Frame processing error: {e}")
-
-    
     # Buttons to switch to modes
     st.markdown("---")
     if st.button("Try the snapshot version"):
