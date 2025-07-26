@@ -1,32 +1,16 @@
-import streamlit as st
 import os
 import numpy as np
 import tensorflow as tf
-import cv2
-from tensorflow.keras.preprocessing.image import img_to_array
+import streamlit as st
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
 import nltk
 from nltk.corpus import words
 from io import BytesIO
 import base64
-import logging
 
-# Set page config first
-st.set_page_config(page_title="ASL Letter Predictor - Live", initial_sidebar_state="collapsed")
-
-# Setup logging to capture import errors
-logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger(__name__)
-
-# Try to import streamlit-camera-input-live
-try:
-    from streamlit_camera_input_live import camera_input_live
-    CAMERA_AVAILABLE = True
-except ImportError as e:
-    logger.error(f"Failed to import streamlit-camera-input-live: {e}")
-    CAMERA_AVAILABLE = False
-
-# Hide sidebar
+# Hide sidebar and set page config
+st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
 st.markdown(
     """
     <style>
@@ -37,7 +21,7 @@ st.markdown(
 )
 
 # Setup
-nltk.download('words', quiet=True)
+nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
 
 IMG_HEIGHT, IMG_WIDTH = 32, 32
@@ -45,6 +29,7 @@ CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
 
 def speak_text(text):
+    # Generate audio in memory
     tts = gTTS(text)
     audio_buffer = BytesIO()
     tts.write_to_fp(audio_buffer)
@@ -94,23 +79,15 @@ def load_model():
         tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
     ])
-    try:
-        model.load_weights(MODEL_PATH)
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    except Exception as e:
-        st.error(f"Failed to load model weights: {e}. Ensure 'best_asl_model.h5' is in the root directory.")
-        st.stop()
+    model.load_weights(MODEL_PATH)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-def preprocess_frame(frame):
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
-    img_array = img_to_array(resized) / 255.0
+def predict_image(image_file, model):
+    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
+    img_array = img_to_array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    return img_array
-
-def predict_image(img_array, model):
-    predictions = model.predict(img_array, verbose=0)
+    predictions = model.predict(img_array)
     class_idx = np.argmax(predictions[0])
     letter = CLASS_NAMES[class_idx]
     confidence = np.max(predictions[0])
@@ -118,107 +95,75 @@ def predict_image(img_array, model):
     return letter, confidence, top_3
 
 def main():
-    st.title("🤟 ASL Letter Predictor - Live Webcam")
-    st.write("Stream live webcam feed to predict ASL letters and form the phrase 'HELLO WORLD'. If the feed doesn't start, check webcam permissions or try Chrome/Firefox.")
-
-    # Display import error if camera module unavailable
-    if not CAMERA_AVAILABLE:
-        st.error("Live webcam mode is unavailable due to missing 'streamlit-camera-input-live' module. Please check Streamlit Cloud logs for dependency installation errors and ensure 'streamlit-camera-input-live==0.2.0' is installed.")
-        # Buttons to switch to modes
-        st.markdown("---")
-        if st.button("Try the snapshot version"):
-            st.switch_page("pages/app_snapshot.py")
-        if st.button("Try the image upload version"):
-            st.switch_page("pages/app_upload.py")
-        return
+    st.title("🤟 ASL Letter Predictor")
+    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
-    if 'last_letter' not in st.session_state:
-        st.session_state.last_letter = None
-    if 'last_confidence' not in st.session_state:
-        st.session_state.last_confidence = 0.0
-    if 'frame_count' not in st.session_state:
-        st.session_state.frame_count = 0
 
     model = load_model()
 
     # Webcam input
-    try:
-        frame = camera_input_live()
-    except Exception as e:
-        logger.error(f"Failed to initialize webcam: {e}")
-        st.error(f"Failed to initialize webcam: {e}. Try refreshing or switching to another mode.")
-        frame = None
+    st.subheader("Use Your Webcam")
+    webcam_image = st.camera_input("Capture an ASL letter")
+    if webcam_image:
+        # Temporarily save the webcam image in memory
+        image_buffer = BytesIO(webcam_image.getvalue())
+        letter, confidence, top_3 = predict_image(image_buffer, model)
 
-    if frame is not None:
-        try:
-            st.session_state.frame_count += 1
-            if st.session_state.frame_count % 5 != 0:  # Process every 5th frame
-                return
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.write("🔝 Top 3 Predictions:")
+        for i, (char, conf) in enumerate(top_3, 1):
+            st.write(f"{i}. {char} — {conf:.2f}")
 
-            img = np.frombuffer(frame.getvalue(), np.uint8)
-            img = cv2.imdecode(img, cv2.IMREAD_COLOR)
-            if img is None or img.size == 0:
-                st.warning("Invalid frame received from webcam.")
-                return
-            img_array = preprocess_frame(img)
-            letter, confidence, top_3 = predict_image(img_array, model)
+        # Speak letter
+        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_buffer = speak_text(speak_text_input)
+        st.markdown(
+            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+            unsafe_allow_html=True
+        )
 
-            # Display frame with prediction
-            cv2.putText(img, f"{letter.upper()} ({confidence:.2f})", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            st.image(img, channels="BGR", caption=f"Predicted: {letter.upper()} ({confidence:.2f})")
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
+        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
 
-            # Update sequence if confidence is high and letter changes
-            if confidence > 0.7 and letter != st.session_state.last_letter:
-                st.session_state.sequence.append(letter)
-                st.session_state.last_letter = letter
-                st.session_state.last_confidence = confidence
+        longest_word = ''
+        for j in range(len(current), 1, -1):
+            word = current[-j:]
+            if word in nltk_words and len(word) > len(longest_word):
+                longest_word = word
 
-            # Display predictions
-            if st.session_state.sequence:
-                st.markdown(f"### Current Sequence: {', '.join(st.session_state.sequence[-10:])}")
-                current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-                
-                # Check for NLTK words
-                longest_word = ''
-                for j in range(len(current), 1, -1):
-                    word = current[-j:]
-                    if word in nltk_words and len(word) > len(longest_word):
-                        longest_word = word
-                if longest_word:
-                    st.markdown(f"🗣 Detected word: **{longest_word}**")
-                    audio_buffer = speak_text(longest_word)
-                    st.markdown(
-                        f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                        unsafe_allow_html=True
-                    )
+        if longest_word:
+            st.markdown(f"🗣 Detected word: **{longest_word}**")
+            audio_buffer = speak_text(longest_word)
+            st.markdown(
+                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                unsafe_allow_html=True
+            )
 
-                # Check for HELLO WORLD sequence
-                target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
-                if len(st.session_state.sequence) >= len(target_sequence):
-                    recent = st.session_state.sequence[-len(target_sequence):]
-                    if all(r == t for r, t in zip(recent, target_sequence)):
-                        st.success("🎉 Phrase Detected: HELLO WORLD")
-                        audio_buffer = speak_text("Hello World")
-                        st.markdown(
-                            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
-                            unsafe_allow_html=True
-                        )
-                        st.session_state.sequence = []
+        # Check for HELLO WORLD sequence
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                audio_buffer = speak_text("Hello World")
+                st.markdown(
+                    f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                    unsafe_allow_html=True
+                )
+                st.session_state.sequence = []  # reset so it can re-detect
 
-        except Exception as e:
-            logger.error(f"Frame processing error: {e}")
-            st.warning(f"Frame processing error: {e}")
-
-    # Buttons to switch to modes
+    # Button to upload app
     st.markdown("---")
-    if st.button("Try the snapshot version"):
-        st.switch_page("pages/app_snapshot.py")
     if st.button("Try the image upload version"):
         st.switch_page("pages/app_upload.py")
+    #if st.button("Try the live webcam version", key="webcam_button"):
+     #   st.switch_page("app.py")
+
 
 if __name__ == '__main__':
+    main()
     main()

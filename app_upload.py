@@ -212,11 +212,11 @@ def main():
    # Buttons to switch to modes
 
     st.markdown("---")
-    if st.button("Try the live webcam version", key="webcam_button"):
-        st.switch_page("app.py")
+    #if st.button("Try the live webcam version", key="webcam_button"):
+      #  st.switch_page("app.py")
     st.markdown("---")
     if st.button("Try the snapshot version"):
-        st.switch_page("pages/app_snapshot.py")
+        st.switch_page("app.py")
     
 
 
