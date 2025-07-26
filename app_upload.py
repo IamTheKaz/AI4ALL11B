@@ -209,10 +209,16 @@ def main():
                 )
                 st.session_state.sequence = []  # reset so it can re-detect
 
-    # Button to webcam app
+   # Buttons to switch to modes
+
     st.markdown("---")
-    if st.button("Try the webcam version", key="webcam_button"):
+    if st.button("Try the live webcam version", key="webcam_button"):
         st.switch_page("app.py")
+    st.markdown("---")
+    if st.button("Try the snapshot version"):
+        st.switch_page("pages/app_snapshot.py")
+    
+
 
 if __name__ == '__main__':
     main()

@@ -160,6 +160,9 @@ def main():
     st.markdown("---")
     if st.button("Try the image upload version"):
         st.switch_page("pages/app_upload.py")
+    if st.button("Try the live webcam version", key="webcam_button"):
+        st.switch_page("app.py")
+
 
 if __name__ == '__main__':
     main()
