@@ -7,3 +7,5 @@ requests==2.31.0
 numpy==1.23.5
 opencv-python==4.8.0.76
 streamlit-webrtc==0.47.4
+av==10.0.0
+aiortc==1.4.2
