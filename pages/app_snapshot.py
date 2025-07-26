@@ -2,10 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-import cv2
-import av
-from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
 import nltk
 from nltk.corpus import words
@@ -13,7 +10,7 @@ from io import BytesIO
 import base64
 
 # Hide sidebar and set page config
-st.set_page_config(page_title="ASL Letter Predictor - Live", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
 st.markdown(
     """
     <style>
@@ -30,11 +27,6 @@ nltk_words = set(w.upper() for w in words.words())
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
 MODEL_PATH = 'best_asl_model.h5'
-
-# WebRTC configuration
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
 
 def speak_text(text):
     # Generate audio in memory
@@ -87,26 +79,14 @@ def load_model():
         tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
     ])
-    try:
-        model.load_weights(MODEL_PATH)
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    except Exception as e:
-        st.error(f"Failed to load model weights: {e}. Ensure 'best_asl_model.h5' is in the root directory.")
-        st.stop()
+    model.load_weights(MODEL_PATH)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
-def preprocess_frame(frame):
-    # Convert BGR to grayscale
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Resize to 32x32
-    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
-    # Normalize
-    img_array = img_to_array(resized) / 255.0
-    # Add batch dimension
+def predict_image(image_file, model):
+    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
+    img_array = img_to_array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    return img_array
-
-def predict_image(img_array, model):
     predictions = model.predict(img_array)
     class_idx = np.argmax(predictions[0])
     letter = CLASS_NAMES[class_idx]
@@ -114,60 +94,47 @@ def predict_image(img_array, model):
     top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
     return letter, confidence, top_3
 
-class VideoProcessor:
-    def __init__(self):
-        self.model = load_model()
-        self.last_letter = None
-        self.last_confidence = 0.0
-        self.sequence = st.session_state.get('sequence', [])
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        img_array = preprocess_frame(img)
-        letter, confidence, top_3 = predict_image(img_array, self.model)
-        
-        # Update sequence only if confidence is high and letter changes
-        if confidence > 0.7 and letter != self.last_letter:
-            self.sequence.append(letter)
-            self.last_letter = letter
-            self.last_confidence = confidence
-            # Update session state
-            st.session_state.sequence = self.sequence
-        
-        # Draw predictions on frame
-        cv2.putText(img, f"{letter.upper()} ({confidence:.2f})", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
 def main():
-    st.title("🤟 ASL Letter Predictor - Live Webcam")
-    st.write("Stream live webcam feed to predict ASL letters and form the phrase 'HELLO WORLD'. Click 'Try the image upload version' to switch to snapshot mode.")
+    st.title("🤟 ASL Letter Predictor")
+    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
 
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
-    # Webcam streamer
-    webrtc_streamer(
-        key="asl-live",
-        mode=WebRtcMode.SENDRECV,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-        video_processor_factory=VideoProcessor,
-        async_processing=True
-    )
+    model = load_model()
 
-    # Display predictions
-    if st.session_state.sequence:
-        st.markdown(f"### Current Sequence: `{', '.join(st.session_state.sequence[-10:])}`")
+    # Webcam input
+    st.subheader("Use Your Webcam")
+    webcam_image = st.camera_input("Capture an ASL letter")
+    if webcam_image:
+        # Temporarily save the webcam image in memory
+        image_buffer = BytesIO(webcam_image.getvalue())
+        letter, confidence, top_3 = predict_image(image_buffer, model)
+
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.write("🔝 Top 3 Predictions:")
+        for i, (char, conf) in enumerate(top_3, 1):
+            st.write(f"{i}. {char} — {conf:.2f}")
+
+        # Speak letter
+        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_buffer = speak_text(speak_text_input)
+        st.markdown(
+            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+            unsafe_allow_html=True
+        )
+
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
         current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
-        
-        # Check for NLTK words
+
         longest_word = ''
         for j in range(len(current), 1, -1):
             word = current[-j:]
             if word in nltk_words and len(word) > len(longest_word):
                 longest_word = word
+
         if longest_word:
             st.markdown(f"🗣 Detected word: **{longest_word}**")
             audio_buffer = speak_text(longest_word)
@@ -187,12 +154,10 @@ def main():
                     f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
                     unsafe_allow_html=True
                 )
-                st.session_state.sequence = []
+                st.session_state.sequence = []  # reset so it can re-detect
 
-    # Button to switch to snapshot mode
+    # Button to upload app
     st.markdown("---")
-    if st.button("Try the snapshot version"):
-        st.switch_page("pages/snapshot_app.py")
     if st.button("Try the image upload version"):
         st.switch_page("pages/app_upload.py")
 
