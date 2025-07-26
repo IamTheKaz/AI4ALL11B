@@ -7,8 +7,6 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
 from camera_input_live import camera_input_live
-from collections import deque
-import time
 
 # Hide sidebar and set page config
 st.set_page_config(page_title="ASL Letter Predictor (Live Webcam)", initial_sidebar_state="collapsed")
@@ -24,10 +22,6 @@ st.markdown(
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']  # 29 classes
-TARGET_FPS = 3
-STABLE_FRAME_COUNT = 3
-CONFIDENCE_THRESHOLD = 0.7
-MAX_CONSECUTIVE = 2
 
 def speak_text(text):
     tts = gTTS(text)
@@ -89,17 +83,10 @@ def load_model():
 
 def preprocess(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
+    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH))
     img_array = img_to_array(resized) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
-
-def is_stable_sign(prediction_buffer):
-    if len(prediction_buffer) < STABLE_FRAME_COUNT:
-        return False
-    letters = [pred['letter'] for pred in prediction_buffer]
-    confidences = [pred['confidence'] for pred in prediction_buffer]
-    return all(letter == letters[0] for letter in letters) and all(conf > CONFIDENCE_THRESHOLD for conf in confidences)
 
 def main():
     st.title("🖐 ASL Letter Predictor (Live Webcam)")
@@ -113,30 +100,16 @@ def main():
         st.session_state.last_confidence = 0.0
     if 'frame_count' not in st.session_state:
         st.session_state.frame_count = 0
-    if 'last_frame_time' not in st.session_state:
-        st.session_state.last_frame_time = time.time()
-    if 'prediction_buffer' not in st.session_state:
-        st.session_state.prediction_buffer = deque(maxlen=STABLE_FRAME_COUNT)
-    if 'consecutive_count' not in st.session_state:
-        st.session_state.consecutive_count = 0
-    if 'current_letter' not in st.session_state:
-        st.session_state.current_letter = None
 
     if st.button("Start Live Predictions"):
         st.session_state.start_stream = True
     elif st.button("Stop Live Predictions"):
         st.session_state.start_stream = False
         st.session_state.frame_count = 0
-        st.session_state.prediction_buffer.clear()
-        st.session_state.consecutive_count = 0
-        st.session_state.current_letter = None
         st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
 
     if st.session_state.get('start_stream', False):
         model = load_model()
-        image_placeholder = st.empty()
-        status_placeholder = st.empty()
-
         try:
             image = camera_input_live()
             if image is None:
@@ -146,31 +119,25 @@ def main():
             st.markdown(
                 """
                 **Troubleshooting**:
-                - Snapshot mode (`app_snapshot.py`) confirms webcam permissions.
+                - Since snapshot mode works, permissions are granted. The issue is with the live webcam module.
                 - Ensure `camera_input_live.py` is in the repository root and compatible with Streamlit 1.39.0.
-                - Check Chrome (`chrome://settings/content/camera`) or Edge (`edge://settings/content/camera`).
-                - On Android, verify Settings > Apps > Streamlit > Permissions > Camera.
-                - Test webcam in another app (e.g., Zoom).
-                - Ensure no other app is using the webcam.
-                - Clear browser cache and refresh the page.
+                - Test webcam in snapshot mode (`app_snapshot.py`) or another app.
+                - Try Chrome, Edge, or Android Chrome (not the Streamlit app).
+                - Refresh the page and try again.
+                - If issues persist, consider switching to `st.camera_input` for live mode.
                 """,
                 unsafe_allow_html=True
             )
-            st.session_state.start_stream = False
             st.stop()
 
         st.session_state.frame_count += 1
-        frame_start_time = time.time()
-        current_time = time.time()
-        frame_rate = 1 / (current_time - st.session_state.last_frame_time) if st.session_state.frame_count > 1 else 0
-        st.session_state.last_frame_time = current_time
+        if st.session_state.frame_count % 5 != 0:
+            st.stop()
 
         bytes_data = image.getvalue()
         img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
 
         if img_np is not None and img_np.size > 0:
-            image_placeholder.image(img_np, channels="BGR", caption="Live Webcam Feed")
-
             processed = preprocess(img_np)
             try:
                 predictions = model.predict(processed, verbose=0)
@@ -178,29 +145,20 @@ def main():
                 confidence = np.max(predictions[0])
                 letter = CLASS_NAMES[predicted_idx]
 
-                st.session_state.prediction_buffer.append({'letter': letter, 'confidence': confidence})
+                cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
 
-                if is_stable_sign(st.session_state.prediction_buffer):
-                    stable_letter = st.session_state.prediction_buffer[0]['letter']
-                    stable_confidence = st.session_state.prediction_buffer[0]['confidence']
+                if confidence > 0.7:
+                    repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
+                                       if st.session_state.sequence[-i] == letter)
 
-                    if stable_letter == st.session_state.current_letter:
-                        st.session_state.consecutive_count += 1
-                    else:
-                        st.session_state.consecutive_count = 1
-                        st.session_state.current_letter = stable_letter
+                    if repeat_count < 2:
+                        st.session_state.sequence.append(letter)
+                        st.session_state.last_letter = letter
+                        st.session_state.last_confidence = confidence
 
-                    if st.session_state.consecutive_count <= MAX_CONSECUTIVE and stable_confidence > CONFIDENCE_THRESHOLD:
-                        st.session_state.sequence.append(stable_letter)
-                        st.session_state.last_letter = stable_letter
-                        st.session_state.last_confidence = stable_confidence
-
-                        cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                        image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
-                        status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
-
-                        audio = speak_text(stable_letter)
+                        audio = speak_text(letter)
                         st.markdown(
                             f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
                             unsafe_allow_html=True
@@ -210,19 +168,16 @@ def main():
                 st.write(" → " + " ".join(st.session_state.sequence[-15:]))
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
-
-            elapsed_time = time.time() - frame_start_time
-            sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
-            time.sleep(sleep_time)
         else:
             st.warning("⚠️ Unable to decode webcam frame.")
             st.markdown(
                 """
                 **Troubleshooting**:
                 - Snapshot mode confirms webcam functionality.
-                - Ensure `camera_input_live.py` is compatible.
+                - The live webcam module (`camera_input_live`) may be failing.
+                - Ensure `camera_input_live.py` is present and compatible.
                 - Test in Chrome or Edge, and try Android Chrome.
-                - Clear browser cache and refresh the page.
+                - Consider using `st.camera_input` for live mode.
                 """,
                 unsafe_allow_html=True
             )
