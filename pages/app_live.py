@@ -6,7 +6,7 @@ import base64
 from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
-from streamlit_camera_input_live import camera_input_live
+from camera_input_live import camera_input_live
 
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
