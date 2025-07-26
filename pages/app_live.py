@@ -6,7 +6,7 @@ import base64
 from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
 from io import BytesIO
-from camera_input_live import camera_input_live
+from camera_input_live import camera_input_live  # ✅ use working import
 
 # Setup
 IMG_HEIGHT, IMG_WIDTH = 32, 32
@@ -75,8 +75,10 @@ def preprocess(img):
 
 def main():
     st.set_page_config(page_title="Live ASL Predictor", layout="centered")
-    st.title("🖐 Live ASL Letter Predictor")
+    st.title("🖐 ASL Letter Predictor (Live Webcam)")
+    st.markdown("Click below to begin live ASL detection from your webcam.")
 
+    # Session State Initialization
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
     if 'last_letter' not in st.session_state:
@@ -86,13 +88,22 @@ def main():
     if 'frame_count' not in st.session_state:
         st.session_state.frame_count = 0
 
+    # Control Start
+    start_stream = st.button("Start Live Predictions")
+    if not start_stream:
+        st.info("Webcam feed is inactive. Click the button above to begin.")
+        return
+
+    # Load model
     model = load_model()
+
+    # Begin webcam feed
     image = camera_input_live()
 
     if image is not None:
         st.session_state.frame_count += 1
         if st.session_state.frame_count % 5 != 0:
-            st.stop()  # Skip to reduce lag
+            st.stop()  # Reduce frame load
 
         bytes_data = image.getvalue()
         img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -104,12 +115,12 @@ def main():
             confidence = np.max(predictions[0])
             letter = CLASS_NAMES[predicted_idx]
 
-            # Show webcam frame with prediction label
+            # Annotate and display
             cv2.putText(img_np, f"{letter} ({confidence:.2f})", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             st.image(img_np, channels="BGR", caption=f"Predicted: {letter} ({confidence:.2f})")
 
-            # Repetition filter: max 2 repeats
+            # Repetition filter: allow up to 2 repeats
             if confidence > 0.7:
                 repeat_count = sum(1 for i in range(1, min(3, len(st.session_state.sequence)+1))
                                    if st.session_state.sequence[-i] == letter)
@@ -119,20 +130,20 @@ def main():
                     st.session_state.last_letter = letter
                     st.session_state.last_confidence = confidence
 
-                    # Audio feedback
+                    # Speak the new letter
                     audio = speak_text(letter)
                     st.markdown(
                         f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
                         unsafe_allow_html=True
                     )
 
-            # Show live letter sequence
-            st.markdown("### 🔡 Sequence")
+            # Display running sequence
+            st.markdown("### 🔡 Letter Sequence")
             st.write(" → " + " ".join(st.session_state.sequence[-15:]))
         else:
-            st.warning("⚠️ Unable to decode webcam frame.")
+            st.warning("⚠️ Unable to decode frame from webcam.")
     else:
-        st.warning("No webcam input detected.")
+        st.warning("No webcam input received.")
 
 if __name__ == "__main__":
     main()
