@@ -1,94 +1,165 @@
-import streamlit as st
-import cv2
+import os
 import numpy as np
-from tensorflow.keras.models import load_model
-import nltk
+import tensorflow as tf
+import streamlit as st
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from gtts import gTTS
+import nltk
+from nltk.corpus import words
 from io import BytesIO
+import base64
 
-# Load the ASL model
-try:
-    model = load_model('best_asl_model.h5')
-except Exception as e:
-    st.error(f"Failed to load model: {e}. Ensure 'best_asl_model.h5' is compatible with TensorFlow 2.12.0.")
-    st.stop()
+# Hide sidebar and set page config
+st.set_page_config(page_title="ASL Letter Predictor", initial_sidebar_state="collapsed")
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# Define class names (excluding 'space')
-CLASS_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
-               'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+# Setup
+nltk.download('words')
+nltk_words = set(w.upper() for w in words.words())
 
-# Initialize NLTK
-nltk.download('words', quiet=True)
+IMG_HEIGHT, IMG_WIDTH = 32, 32
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']
+MODEL_PATH = 'best_asl_model.h5'
 
-def preprocess_frame(frame):
-    # Resize to 32x32
-    frame = cv2.resize(frame, (32, 32))
-    # Convert to grayscale
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Normalize
-    frame = frame / 255.0
-    # Add batch and channel dimensions
-    frame = np.expand_dims(frame, axis=0)
-    frame = np.expand_dims(frame, axis=-1)  # Shape: (1, 32, 32, 1)
-    return frame
+def speak_text(text):
+    # Generate audio in memory
+    tts = gTTS(text)
+    audio_buffer = BytesIO()
+    tts.write_to_fp(audio_buffer)
+    audio_buffer.seek(0)
+    return audio_buffer
 
-def predict_letter(frame):
-    processed_frame = preprocess_frame(frame)
-    prediction = model.predict(processed_frame)
-    predicted_class = np.argmax(prediction, axis=1)[0]
-    if predicted_class >= len(CLASS_NAMES):
-        raise ValueError(f"Predicted class index {predicted_class} exceeds CLASS_NAMES length {len(CLASS_NAMES)}")
-    return CLASS_NAMES[predicted_class]
+@st.cache_resource
+def load_model():
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 1)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.3),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.3),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.4),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.4),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(1024, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.6),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.6),
+        tf.keras.layers.Dense(256, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
+    ])
+    model.load_weights(MODEL_PATH)
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+def predict_image(image_file, model):
+    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
+    img_array = img_to_array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    predictions = model.predict(img_array)
+    class_idx = np.argmax(predictions[0])
+    letter = CLASS_NAMES[class_idx]
+    confidence = np.max(predictions[0])
+    top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
+    return letter, confidence, top_3
 
 def main():
-    st.title("ASL Letter Predictor")
-    st.write("Take a photo to predict ASL letters.")
+    st.title("🤟 ASL Letter Predictor")
+    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
 
     # Initialize session state
-    if 'predicted_letters' not in st.session_state:
-        st.session_state.predicted_letters = []
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
 
-    # Get snapshot
-    frame = st.camera_input("Take a photo")
+    model = load_model()
 
-    if frame is not None:
-        # Convert BytesIO to OpenCV
-        frame_array = np.frombuffer(frame.getvalue(), np.uint8)
-        frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
-        
-        # Validate frame
-        if frame is not None and frame.size > 0:
-            st.image(frame, channels="BGR", caption="Captured Image")
-            
-            # Predict letter
-            try:
-                predicted_letter = predict_letter(frame)
-                st.write(f"Predicted Letter: {predicted_letter}")
-                
-                # Append to session state
-                st.session_state.predicted_letters.append(predicted_letter)
-                
-                # Display recent predictions
-                st.write("Recent Predictions:", ", ".join(st.session_state.predicted_letters[-10:]))
-                
-                # Check target sequence
-                target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
-                if len(st.session_state.predicted_letters) >= len(target_sequence):
-                    recent = st.session_state.predicted_letters[-len(target_sequence):]
-                    if recent == target_sequence:
-                        word = "".join(recent)
-                        st.write(f"Recognized Word: {word}")
-                        try:
-                            audio_buffer = BytesIO()
-                            tts = gTTS(word)
-                            tts.write_to_fp(audio_buffer)
-                            audio_buffer.seek(0)
-                            st.audio(audio_buffer, format="audio/mp3")
-                            st.session_state.predicted_letters = []
-                        except Exception as e:
-                            st.error(f"Audio generation failed: {e}")
-            except Exception as e:
-                st.error(f"Prediction failed: {e}")
+    # Webcam input
+    st.subheader("Use Your Webcam")
+    webcam_image = st.camera_input("Capture an ASL letter")
+    if webcam_image:
+        # Temporarily save the webcam image in memory
+        image_buffer = BytesIO(webcam_image.getvalue())
+        letter, confidence, top_3 = predict_image(image_buffer, model)
 
-if __name__ == "__main__":
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.write("🔝 Top 3 Predictions:")
+        for i, (char, conf) in enumerate(top_3, 1):
+            st.write(f"{i}. {char} — {conf:.2f}")
+
+        # Speak letter
+        speak_text_input = {'space': 'space', 'del': 'delete', 'nothing': 'no letter detected'}.get(letter, letter)
+        audio_buffer = speak_text(speak_text_input)
+        st.markdown(
+            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+            unsafe_allow_html=True
+        )
+
+        # Update sequence and check for words
+        st.session_state.sequence.append(letter)
+        current = ''.join([l.upper() if l != 'space' else '' for l in st.session_state.sequence])
+
+        longest_word = ''
+        for j in range(len(current), 1, -1):
+            word = current[-j:]
+            if word in nltk_words and len(word) > len(longest_word):
+                longest_word = word
+
+        if longest_word:
+            st.markdown(f"🗣 Detected word: **{longest_word}**")
+            audio_buffer = speak_text(longest_word)
+            st.markdown(
+                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                unsafe_allow_html=True
+            )
+
+        # Check for HELLO WORLD sequence
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'space', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                audio_buffer = speak_text("Hello World")
+                st.markdown(
+                    f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                    unsafe_allow_html=True
+                )
+                st.session_state.sequence = []  # reset so it can re-detect
+
+    # Button to upload app
+    st.markdown("---")
+    if st.button("Try the image upload version"):
+        st.switch_page("pages/app_upload.py")
+
+if __name__ == '__main__':
     main()
