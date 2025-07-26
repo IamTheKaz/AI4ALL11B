@@ -2,7 +2,11 @@ import os
 import numpy as np
 import tensorflow as tf
 import streamlit as st
-from streamlit_camera_input_live import camera_input_live
+try:
+    from streamlit_camera_input_live import camera_input_live
+except ImportError as e:
+    st.error(f"Failed to import streamlit-camera-input-live: {e}. Ensure 'streamlit-camera-input-live==0.2.0' is in requirements.txt and installed correctly.")
+    st.stop()
 import cv2
 from tensorflow.keras.preprocessing.image import img_to_array
 from gtts import gTTS
@@ -114,13 +118,24 @@ def main():
         st.session_state.last_letter = None
     if 'last_confidence' not in st.session_state:
         st.session_state.last_confidence = 0.0
+    if 'frame_count' not in st.session_state:
+        st.session_state.frame_count = 0
 
     model = load_model()
 
     # Webcam input
-    frame = camera_input_live()
+    try:
+        frame = camera_input_live()
+    except Exception as e:
+        st.error(f"Failed to initialize webcam: {e}. Ensure webcam access is allowed and try again.")
+        return
+
     if frame is not None:
         try:
+            st.session_state.frame_count += 1
+            if st.session_state.frame_count % 5 != 0:  # Process every 5th frame
+                return
+
             img = np.frombuffer(frame.getvalue(), np.uint8)
             img = cv2.imdecode(img, cv2.IMREAD_COLOR)
             if img is None or img.size == 0:
@@ -165,6 +180,15 @@ def main():
                     recent = st.session_state.sequence[-len(target_sequence):]
                     if all(r == t for r, t in zip(recent, target_sequence)):
                         st.success("🎉 Phrase Detected: HELLO WORLD")
+                        audio_buffer = speak_text("Hello World")
+                        st.markdown(
+                            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
+                            unsafe_allow_html=True
+                        )
+                        st.session_state.sequence = []
+
+        except Exception as e:
+            st.warning(f"Frame processing error: {e}")
 
     # Buttons to switch to modes
     st.markdown("---")
