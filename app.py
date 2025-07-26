@@ -9,15 +9,21 @@ import nltk
 from nltk.corpus import words
 from io import BytesIO
 import base64
+import logging
 
 # Set page config first
 st.set_page_config(page_title="ASL Letter Predictor - Live", initial_sidebar_state="collapsed")
+
+# Setup logging to capture import errors
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 # Try to import streamlit-camera-input-live
 try:
     from streamlit_camera_input_live import camera_input_live
     CAMERA_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.error(f"Failed to import streamlit-camera-input-live: {e}")
     CAMERA_AVAILABLE = False
 
 # Hide sidebar
@@ -117,7 +123,7 @@ def main():
 
     # Display import error if camera module unavailable
     if not CAMERA_AVAILABLE:
-        st.error("Live webcam mode is unavailable due to missing 'streamlit-camera-input-live' module. Please use snapshot or image upload mode.")
+        st.error("Live webcam mode is unavailable due to missing 'streamlit-camera-input-live' module. Please check Streamlit Cloud logs for dependency installation errors and ensure 'streamlit-camera-input-live==0.2.0' is installed.")
         # Buttons to switch to modes
         st.markdown("---")
         if st.button("Try the snapshot version"):
@@ -142,6 +148,7 @@ def main():
     try:
         frame = camera_input_live()
     except Exception as e:
+        logger.error(f"Failed to initialize webcam: {e}")
         st.error(f"Failed to initialize webcam: {e}. Try refreshing or switching to another mode.")
         frame = None
 
@@ -203,6 +210,7 @@ def main():
                         st.session_state.sequence = []
 
         except Exception as e:
+            logger.error(f"Frame processing error: {e}")
             st.warning(f"Frame processing error: {e}")
 
     # Buttons to switch to modes
