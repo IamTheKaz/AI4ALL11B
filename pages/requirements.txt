@@ -7,5 +7,5 @@ requests==2.31.0
 numpy==1.23.5
 opencv-python==4.8.0.76
 camera-input-live==0.2.0
-mediapipe==0.10.0
+mediapipe==0.10.8
 Pillow==9.5.0
