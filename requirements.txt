@@ -1,4 +1,4 @@
-tensorflow==2.15.0
+tensorflow==2.18.0
 mediapipe==0.10.14
 streamlit==1.39.0
 opencv-python==4.8.0.76
