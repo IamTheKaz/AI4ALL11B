@@ -1,3 +1,5 @@
+
+
 import os
 import numpy as np
 import tensorflow as tf
@@ -10,6 +12,16 @@ import requests
 from io import BytesIO
 import base64
 
+# Hide sidebar and set page config
+st.set_page_config(page_title="ASL Letter Predictor (Image Upload)", initial_sidebar_state="collapsed")
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 # Setup
 nltk.download('words')
 nltk_words = set(w.upper() for w in words.words())
@@ -178,7 +190,7 @@ def main():
                 longest_word = word
 
         if longest_word:
-            st.markdown(f"🧠 Detected word: **{longest_word}**")
+            st.markdown(f"🗣 Detected word: **{longest_word}**")
             audio_buffer = speak_text(longest_word)
             st.markdown(
                 f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer.read()).decode()}"></audio>',
@@ -198,9 +210,19 @@ def main():
                 )
                 st.session_state.sequence = []  # reset so it can re-detect
 
-    # Link to webcam app
-    st.markdown("---")
-    st.markdown("Want to use the webcam instead? [Try the webcam version](./)")
+ # --- Mode Switching Section ---
+st.markdown("---")
+st.markdown("#### 🧭 Try Alternate Input Modes:")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("📷 Snapshot Version"):
+        st.switch_page("pages/app_snapshot.py")
+with col2:
+    if st.button("🤳 Live Webcam Version"):
+        st.switch_page("app.py")
+
+    
+
 
 if __name__ == '__main__':
     main()
