@@ -46,16 +46,25 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-def predict_image(image_file, model):
-    img = load_img(image_file, target_size=(IMG_HEIGHT, IMG_WIDTH), color_mode='grayscale')
-    img_array = img_to_array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    predictions = model.predict(img_array)
-    class_idx = np.argmax(predictions[0])
-    letter = CLASS_NAMES[class_idx]
-    confidence = np.max(predictions[0])
-    top_3 = [(CLASS_NAMES[i], predictions[0][i]) for i in np.argsort(predictions[0])[-3:][::-1]]
-    return letter, confidence, top_3
+def predict_image(image):
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = hands.process(image_rgb)
+
+    if not results.multi_hand_landmarks:
+        return "blank", 0.0, [("blank", 1.0)]
+
+    hand_landmarks = results.multi_hand_landmarks[0]
+    landmarks = []
+    for lm in hand_landmarks.landmark:
+        landmarks.extend([lm.x, lm.y, lm.z])
+
+    input_array = np.array(landmarks).reshape(1, -1)
+    prediction_probs = model.predict(input_array)[0]
+    pred_index = np.argmax(prediction_probs)
+    prediction = CLASS_NAMES[pred_index]
+    confidence = round(prediction_probs[pred_index], 2)
+
+    return prediction, confidence, list(zip(CLASS_NAMES, prediction_probs))
 
 def main():
     st.title("🤟 ASL Letter Predictor")
