@@ -10,8 +10,8 @@ import tensorflow as tf
 # Load your trained TensorFlow model
 model = tf.keras.models.load_model("asl_model.h5")
 
-# Define class names: A-Z and 'blank' only
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
+# Define class names: A-Z + 'blank' + one extra fallback
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
 
 # Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
@@ -46,18 +46,23 @@ def predict_image(image):
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    # Extract and reshape landmarks
-    landmarks = []
-    for lm in hand_landmarks.landmark:
-        landmarks.extend([lm.x, lm.y, lm.z])
+    # Match training format: x + y + z
+    x_vals = [lm.x for lm in hand_landmarks.landmark]
+    y_vals = [lm.y for lm in hand_landmarks.landmark]
+    z_vals = [lm.z for lm in hand_landmarks.landmark]
+    input_array = np.array(x_vals + y_vals + z_vals).reshape(1, -1)
 
-    input_array = np.array(landmarks).reshape(1, -1)
     prediction_probs = model.predict(input_array)[0]
     pred_index = np.argmax(prediction_probs)
+
+    # Safe fallback if index is out of bounds
+    if pred_index >= len(CLASS_NAMES):
+        return "fallback", 0.0, [("fallback", 1.0)]
+
     prediction = CLASS_NAMES[pred_index]
     confidence = round(prediction_probs[pred_index], 2)
-
     top_3 = [(CLASS_NAMES[i], round(prediction_probs[i], 2)) for i in np.argsort(prediction_probs)[-3:][::-1]]
+
     return prediction, confidence, top_3
 
 # 🎯 Streamlit UI
@@ -131,7 +136,7 @@ if uploaded_file:
     spoken_text = speak_text_input(letter)
     st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
 
-    if letter != "blank":
+    if letter != "blank" and letter != "fallback":
         st.session_state.sequence.append(letter)
 
     current = ''.join(st.session_state.sequence).upper()
