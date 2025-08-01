@@ -74,40 +74,55 @@ def main():
         st.session_state.sequence = []
 
     st.subheader("Use Your Webcam")
-    webcam_image = st.camera_input("Capture an ASL letter")
-    if webcam_image:
-        image_buffer = BytesIO(webcam_image.getvalue())
-        letter, confidence, top_3 = predict_image(image_buffer, model)
+webcam_image = st.camera_input("Capture an ASL letter")
 
-        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-        st.write("🔝 Top 3 Predictions:")
-        for i, (char, conf) in enumerate(top_3, 1):
-            st.write(f"{i}. {char} — {conf:.2f}")
+if webcam_image:
+    # Convert webcam image to OpenCV format
+    image_bytes = webcam_image.getvalue()
+    np_image = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(np_image, cv2.IMREAD_COLOR)
 
-        speak_text_input_value = speak_text_input(letter)
-        audio_buffer = speak_text(speak_text_input_value)
+    # Run prediction
+    letter, confidence, top_3 = predict_image(image)
+
+    # Display results like the upload version
+    st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
+    st.markdown(f"### ✅ Detected Letter: `{letter.upper()}`")
+    st.markdown(f"**Confidence:** `{confidence:.2f}`")
+
+    st.markdown("#### 🔝 Top 3 Predictions:")
+    for i, (char, conf) in enumerate(top_3, 1):
+        st.write(f"{i}. `{char}` — `{conf:.2f}`")
+
+    # Speak the predicted letter
+    spoken_text = "No hand sign detected" if letter == "blank" else letter
+    audio_buffer = speak_text(spoken_text)
+    st.markdown(
+        f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_buffer).decode()}"></audio>',
+        unsafe_allow_html=True
+    )
+
+    # Update sequence and check for valid words
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
+
+    if letter != "blank":
+        st.session_state.sequence.append(letter)
+
+    current = ''.join(st.session_state.sequence).upper()
+    longest_word = ''
+    for j in range(len(current), 1, -1):
+        word = current[-j:]
+        if word in nltk_words and len(word) > len(longest_word):
+            longest_word = word
+
+    if longest_word:
+        st.markdown(f"🗣 Detected Word: **{longest_word}**")
+        audio_buffer = speak_text(longest_word)
         st.markdown(
-            f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer).decode()}"></audio>',
+            f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio_buffer).decode()}"></audio>',
             unsafe_allow_html=True
         )
-
-        if letter != 'blank':
-            st.session_state.sequence.append(letter)
-        current = ''.join([l.upper() for l in st.session_state.sequence])
-
-        longest_word = ''
-        for j in range(len(current), 1, -1):
-            word = current[-j:]
-            if word in nltk_words and len(word) > len(longest_word):
-                longest_word = word
-
-        if longest_word:
-            st.markdown(f"🗣 Detected word: **{longest_word}**")
-            audio_buffer = speak_text(longest_word)
-            st.markdown(
-                f'<audio autoplay="true" src="data:audio/mp3;base64,{base64.b64encode(audio_buffer).decode()}"></audio>',
-                unsafe_allow_html=True
-            )
 
         target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
         if len(st.session_state.sequence) >= len(target_sequence):
