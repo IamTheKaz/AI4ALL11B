@@ -10,6 +10,7 @@ from camera_input_live import camera_input_live
 from nltk.corpus import words
 import nltk
 import time
+from PIL import Image
 
 nltk.download('words')
 nltk_words = set(words.words())
@@ -85,6 +86,10 @@ while st.session_state.live_mode:
     if image is None:
         frame_placeholder.warning("No image received. Is your webcam active?")
         continue
+
+    # Convert PIL to NumPy if needed
+    if isinstance(image, Image.Image):
+        image = np.array(image)
 
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = hands.process(image_rgb)
