@@ -80,7 +80,7 @@ def predict_image(image):
 
 # 🚀 Main app
 def main():
-    st.title("📸 Snapshot ASL Detector")
+    st.title("🤟 Snapshot ASL Detector")
     st.markdown("Capture a photo using your webcam to predict ASL letters. Try forming the phrase **HELLO WORLD**!")
 
     # ✅ Always-visible mode-switch buttons

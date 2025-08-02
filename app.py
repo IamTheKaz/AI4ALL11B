@@ -92,7 +92,7 @@ def is_stable(current, previous, threshold=0.01):
 
 # 🚀 Main app
 def main():
-    st.title("🖐️ Auto-Capture ASL Detector")
+    st.title("🤟 Auto-Capture ASL Detector")
     st.markdown("This app automatically captures and predicts ASL signs when your hand is stable.")
 
     # 🧠 Session state setup
