@@ -2,7 +2,7 @@ tensorflow==2.18.0
 mediapipe==0.10.14
 streamlit==1.39.0
 opencv-python==4.8.0.76
-numpy==1.24.4
+numpy==1.26.4
 
 gtts==2.5.3
 rich==13.7.1
