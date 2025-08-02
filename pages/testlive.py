@@ -3,14 +3,15 @@ import numpy as np
 import cv2
 from PIL import Image
 import mediapipe as mp
+import time
 
 # Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1)
 
-# Dummy model and class names for illustration
-model = ...  # Load your trained model here
+# Dummy model and class names
+model = ...  # Load your trained model
 CLASS_NAMES = [...]  # Your gesture class names
 
 def extract_landmark_array(hand_landmarks):
@@ -24,9 +25,6 @@ def is_stable(current, previous, threshold=0.01):
     return np.linalg.norm(current - previous) < threshold
 
 def predict_image(image_pil):
-    if not isinstance(image_pil, Image.Image):
-        image_pil = Image.open(image_pil)
-
     image_np = np.array(image_pil)
 
     if image_np.shape[-1] == 4:
@@ -51,15 +49,15 @@ def predict_image(image_pil):
 
     return prediction, confidence, top_3, extract_landmark_array(hand_landmarks)
 
-# Streamlit UI
-st.title("Live Hand Gesture Recognition")
-
+# Initialize session state
 if "last_prediction" not in st.session_state:
     st.session_state.last_prediction = ""
 if "previous_landmarks" not in st.session_state:
     st.session_state.previous_landmarks = None
 
-image = st.camera_input("Show your hand to the camera")
+st.title("Live Hand Gesture Recognition (Auto-Capture)")
+
+image = st.camera_input("Live Feed", key="livefeed")
 
 if image:
     image_pil = Image.open(image)
@@ -78,5 +76,9 @@ if image:
         st.info("Waiting for stable hand position...")
 
     st.session_state.previous_landmarks = current_landmarks
+
+    # Simulate auto-refresh
+    time.sleep(1.5)
+    st.experimental_rerun()
 else:
-    st.warning("No camera input detected.")    
+    st.warning("Waiting for camera input...")   
