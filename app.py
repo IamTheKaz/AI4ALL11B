@@ -12,18 +12,29 @@ from nltk.corpus import words
 import nltk
 from camera_input_live import camera_input_live
 
+# 🧼 Hide sidebar and set page config
+st.set_page_config(page_title="ASL Live Detector", layout="centered", initial_sidebar_state="collapsed")
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stSidebarNav"] { display: none; }
+    [data-testid="stSidebarContent"] { display: none; }
+    .css-1d391kg { display: none; }
+    </style>
+""", unsafe_allow_html=True)
+
 # 📦 Ensure NLTK words are available
 nltk.download('words')
 nltk_words = set(words.words())
-
-# 🧠 Load model and class names
-model = tf.keras.models.load_model("asl_model.h5")
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
 
 # 🖐️ MediaPipe setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
 mp_drawing = mp.solutions.drawing_utils
+
+# 🧠 Load model and class names
+model = tf.keras.models.load_model("asl_model.h5")
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
 
 # 🔊 Speech synthesis
 def speak_text(text):
@@ -82,7 +93,18 @@ def is_stable(current, previous, threshold=0.01):
 # 🚀 Main app
 def main():
     st.title("🖐️ Auto-Capture ASL Detector")
-    st.markdown("Click below to start or stop live ASL detection from your webcam.")
+    st.markdown("This app automatically captures and predicts ASL signs when your hand is stable.")
+
+    # ✅ Always-visible navigation buttons
+    st.markdown("---")
+    st.markdown("### 🧭 Switch Mode:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📸 Snapshot Mode"):
+            st.switch_page("pages/app_snapshot.py")
+    with col2:
+        if st.button("🖼️ Upload Mode"):
+            st.switch_page("pages/app_upload.py")
 
     # 🧠 Session state setup
     for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
@@ -90,11 +112,11 @@ def main():
             st.session_state[key] = None if key == 'prev_landmarks' else []
 
     # ▶️ Start/Stop buttons
-    col1, col2 = st.columns(2)
-    with col1:
+    col3, col4 = st.columns(2)
+    with col3:
         if st.button("▶️ Start Live Predictions"):
             st.session_state.start_stream = True
-    with col2:
+    with col4:
         if st.button("⏹️ Stop Live Predictions"):
             st.session_state.start_stream = False
             st.session_state.prev_landmarks = None
@@ -102,19 +124,14 @@ def main():
             st.session_state.last_prediction = None
             st.info("Live prediction stopped. Click 'Start' to resume.")
 
-    # ✅ Always show mode-switch buttons
-    st.markdown("---")
-    st.markdown("### 🧭 Switch Mode:")
-    if st.button("📸 Try the snapshot version"):
-        st.switch_page("pages/app_snapshot.py")
-    if st.button("🖼️ Try the image upload version"):
-        st.switch_page("pages/app_upload.py")
+    # 🎥 Live prediction loop using st.empty()
+    image_placeholder = st.empty()
+    status_placeholder = st.empty()
 
-    # 🎥 Live prediction loop
     if st.session_state.get('start_stream', False):
         image = camera_input_live()
         if image:
-            st.image(image, caption="Live Preview", channels="RGB")
+            image_placeholder.image(image, caption="Live Preview", channels="RGB")
 
             image_np = np.array(image)
             letter, confidence, top_3, current_landmarks = predict_image(image_np)
@@ -122,7 +139,7 @@ def main():
             if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
                 if letter != st.session_state.last_prediction:
                     st.session_state.last_prediction = letter
-                    st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
+                    status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
                     st.markdown("#### 🔝 Top 3 Predictions:")
                     for i, (char, conf) in enumerate(top_3, 1):
@@ -154,9 +171,6 @@ def main():
                             st.session_state.sequence = []
 
             st.session_state.prev_landmarks = current_landmarks
-
-            # ⏱️ Optional: add delay if needed
-            time.sleep(2)
 
 # 🏁 Entry point
 if __name__ == '__main__':
