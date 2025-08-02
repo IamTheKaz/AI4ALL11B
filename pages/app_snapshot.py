@@ -10,23 +10,32 @@ from PIL import Image
 import tempfile
 from nltk.corpus import words
 import nltk
+
+# 📦 Setup
 nltk.download('words')
 nltk_words = set(words.words())
 
-# Load your trained TensorFlow model
-model = tf.keras.models.load_model("asl_model.h5")
+# 🧼 Hide sidebar and set page config
+st.set_page_config(page_title="ASL Snapshot Detector", layout="centered", initial_sidebar_state="collapsed")
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stSidebarNav"] { display: none; }
+    [data-testid="stSidebarContent"] { display: none; }
+    .css-1d391kg { display: none; }
+    </style>
+""", unsafe_allow_html=True)
 
-# Define class names: A-Z + 'blank' + fallback
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
-
-# Initialize MediaPipe Hands
+# 🖐️ MediaPipe setup
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True,
-                       max_num_hands=1,
-                       min_detection_confidence=0.7)
+hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
 mp_drawing = mp.solutions.drawing_utils
 
-# 🔊 Speech functions
+# 🧠 Load model and class names
+model = tf.keras.models.load_model("asl_model.h5")
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
+
+# 🔊 Speech synthesis
 def speak_text_input(letter):
     return "No hand sign detected" if letter == "blank" else letter
 
@@ -41,7 +50,7 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-# 🧠 Prediction function
+# 🧠 Prediction logic
 def predict_image(image):
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = hands.process(image_rgb)
@@ -52,7 +61,6 @@ def predict_image(image):
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    # Match training format: x + y + z
     x_vals = [lm.x for lm in hand_landmarks.landmark]
     y_vals = [lm.y for lm in hand_landmarks.landmark]
     z_vals = [lm.z for lm in hand_landmarks.landmark]
@@ -70,16 +78,29 @@ def predict_image(image):
 
     return letter, confidence, top_3
 
-# 🎯 Main App
+# 🚀 Main app
 def main():
-    st.title("🤟 ASL Letter Predictor")
-    st.write("Use the webcam to capture ASL letters and form the phrase 'HELLO WORLD'. Alternatively, use the button below to upload images.")
+    st.title("📸 Snapshot ASL Detector")
+    st.markdown("Capture a photo using your webcam to predict ASL letters. Try forming the phrase **HELLO WORLD**!")
 
+    # ✅ Always-visible mode-switch buttons
+    st.markdown("### 🧭 Switch Mode:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🎬 Live Mode"):
+            st.switch_page("app_live.py")
+    with col2:
+        if st.button("🖼️ Upload Mode"):
+            st.switch_page("pages/app_upload.py")
+
+    # 🧠 Session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
-    st.subheader("Use Your Webcam")
-    webcam_image = st.camera_input("Capture an ASL letter")
+    # 📷 Webcam input
+    st.markdown("---")
+    st.subheader("Capture ASL Letter")
+    webcam_image = st.camera_input("Click below to capture")
 
     if webcam_image:
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -91,15 +112,16 @@ def main():
 
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
-        st.write("🔝 Top 3 Predictions:")
+
+        st.markdown("#### 🔝 Top 3 Predictions:")
         for i, (char, conf) in enumerate(top_3, 1):
-            st.write(f"{i}. {char} — {conf:.2f}")
+            st.write(f"{i}. `{char}` — `{conf:.2f}`")
 
         spoken_text = speak_text_input(letter)
         audio_buffer = speak_text(spoken_text)
         st.markdown(get_audio_download_link(audio_buffer), unsafe_allow_html=True)
 
-        if letter != "blank" and letter != "fallback":
+        if letter not in ["blank", "fallback"]:
             st.session_state.sequence.append(letter)
 
         current = ''.join([l.upper() for l in st.session_state.sequence])
@@ -110,18 +132,17 @@ def main():
                 longest_word = word
 
         if longest_word:
-            st.markdown(f"🗣 Detected word: **{longest_word}**")
-            audio_buffer = speak_text(longest_word)
-            st.markdown(get_audio_download_link(audio_buffer), unsafe_allow_html=True)
+            st.markdown(f"🗣 Detected Word: **{longest_word}**")
+            st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
 
         target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
         if len(st.session_state.sequence) >= len(target_sequence):
             recent = st.session_state.sequence[-len(target_sequence):]
             if all(r == t for r, t in zip(recent, target_sequence)):
                 st.success("🎉 Phrase Detected: HELLO WORLD")
-                audio_buffer = speak_text("Hello World")
-                st.markdown(get_audio_download_link(audio_buffer), unsafe_allow_html=True)
+                st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
                 st.session_state.sequence = []
 
+# 🏁 Entry point
 if __name__ == "__main__":
     main()
