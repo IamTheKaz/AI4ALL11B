@@ -102,7 +102,7 @@ def main():
             st.session_state.last_prediction = None
             st.info("Live prediction stopped. Click 'Start' to resume.")
 
-    # 🔄 Always show mode-switch buttons
+    # ✅ Always show mode-switch buttons
     st.markdown("---")
     st.markdown("### 🧭 Switch Mode:")
     if st.button("📸 Try the snapshot version"):
@@ -112,12 +112,9 @@ def main():
 
     # 🎥 Live prediction loop
     if st.session_state.get('start_stream', False):
-        image_placeholder = st.empty()
-        status_placeholder = st.empty()
-
         image = camera_input_live()
         if image:
-            image_placeholder.image(image, caption="Live Preview", channels="RGB")
+            st.image(image, caption="Live Preview", channels="RGB")
 
             image_np = np.array(image)
             letter, confidence, top_3, current_landmarks = predict_image(image_np)
@@ -125,7 +122,7 @@ def main():
             if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
                 if letter != st.session_state.last_prediction:
                     st.session_state.last_prediction = letter
-                    status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
+                    st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
                     st.markdown("#### 🔝 Top 3 Predictions:")
                     for i, (char, conf) in enumerate(top_3, 1):
@@ -157,6 +154,9 @@ def main():
                             st.session_state.sequence = []
 
             st.session_state.prev_landmarks = current_landmarks
+
+            # ⏱️ Optional: add delay if needed
+            time.sleep(2)
 
 # 🏁 Entry point
 if __name__ == '__main__':
