@@ -95,34 +95,35 @@ def main():
     st.title("🖐️ Auto-Capture ASL Detector")
     st.markdown("This app automatically captures and predicts ASL signs when your hand is stable.")
 
-    # ✅ Always-visible navigation buttons
-    st.markdown("---")
-    st.markdown("### 🧭 Switch Mode:")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📸 Snapshot Mode"):
-            st.switch_page("pages/app_snapshot.py")
-    with col2:
-        if st.button("🖼️ Upload Mode"):
-            st.switch_page("pages/app_upload.py")
-
     # 🧠 Session state setup
     for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
         if key not in st.session_state:
             st.session_state[key] = None if key == 'prev_landmarks' else []
 
-    # ▶️ Start/Stop buttons
-    col3, col4 = st.columns(2)
-    with col3:
+    # ▶️ Start/Stop buttons (above mode buttons)
+    st.markdown("### 🎬 Live Detection Controls")
+    col1, col2 = st.columns(2)
+    with col1:
         if st.button("▶️ Start Live Predictions"):
             st.session_state.start_stream = True
-    with col4:
+    with col2:
         if st.button("⏹️ Stop Live Predictions"):
             st.session_state.start_stream = False
             st.session_state.prev_landmarks = None
             st.session_state.sequence = []
             st.session_state.last_prediction = None
             st.info("Live prediction stopped. Click 'Start' to resume.")
+
+    # ✅ Always-visible mode-switch buttons
+    st.markdown("---")
+    st.markdown("### 🧭 Switch Mode:")
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("📸 Snapshot Mode"):
+            st.switch_page("pages/app_snapshot.py")
+    with col4:
+        if st.button("🖼️ Upload Mode"):
+            st.switch_page("pages/app_upload.py")
 
     # 🎥 Live prediction loop using st.empty()
     image_placeholder = st.empty()
