@@ -88,87 +88,90 @@ def is_stable(current, previous, threshold=0.01):
     delta = np.linalg.norm(current - previous)
     return delta < threshold
 
-# 🖼️ UI setup
-st.title("🖐️ Auto-Capture ASL Detector")
-st.markdown("Click below to start or stop live ASL detection from your webcam.")
+def main():
+    # 🖼️ UI setup
+    st.title("🖐️ Auto-Capture ASL Detector")
+    st.markdown("Click below to start or stop live ASL detection from your webcam.")
 
-# 🧠 Session state initialization
-for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
-    if key not in st.session_state:
-        st.session_state[key] = None if key == 'prev_landmarks' else []
+    # 🧠 Session state initialization
+    for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
+        if key not in st.session_state:
+            st.session_state[key] = None if key == 'prev_landmarks' else []
 
-# 🎛️ Start/Stop buttons
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("▶️ Start Live Predictions"):
-        st.session_state.start_stream = True
-with col2:
-    if st.button("⏹️ Stop Live Predictions"):
-        st.session_state.start_stream = False
-        st.session_state.prev_landmarks = None
-        st.session_state.sequence = []
-        st.session_state.last_prediction = None
-        st.info("Live prediction stopped. Click 'Start' to resume.")
+    # 🎛️ Start/Stop buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("▶️ Start Live Predictions"):
+            st.session_state.start_stream = True
+    with col2:
+        if st.button("⏹️ Stop Live Predictions"):
+            st.session_state.start_stream = False
+            st.session_state.prev_landmarks = None
+            st.session_state.sequence = []
+            st.session_state.last_prediction = None
+            st.info("Live prediction stopped. Click 'Start' to resume.")
 
-# ⏱️ Refresh interval
-REFRESH_INTERVAL = 2
+    # ⏱️ Refresh interval
+    REFRESH_INTERVAL = 2
 
-# 🚀 Main live loop
-if st.session_state.get('start_stream', False):
-    image = camera_input_live()
-    if image:
-        st.image(image, caption="Live Preview", channels="RGB")
+    # 🚀 Main live loop
+    if st.session_state.get('start_stream', False):
+        image = camera_input_live()
+        if image:
+            st.image(image, caption="Live Preview", channels="RGB")
 
-        image_np = np.array(image)
-        letter, confidence, top_3, current_landmarks = predict_image(image_np)
+            image_np = np.array(image)
+            letter, confidence, top_3, current_landmarks = predict_image(image_np)
 
-        if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
-            if letter != st.session_state.last_prediction:
-                st.session_state.last_prediction = letter
-                st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
+            if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
+                if letter != st.session_state.last_prediction:
+                    st.session_state.last_prediction = letter
+                    st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
-                st.markdown("#### 🔝 Top 3 Predictions:")
-                for i, (char, conf) in enumerate(top_3, 1):
-                    st.write(f"{i}. `{char}` — `{conf:.2f}`")
+                    st.markdown("#### 🔝 Top 3 Predictions:")
+                    for i, (char, conf) in enumerate(top_3, 1):
+                        st.write(f"{i}. `{char}` — `{conf:.2f}`")
 
-                spoken_text = letter if letter != "blank" else "No hand sign detected"
-                st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
+                    spoken_text = letter if letter != "blank" else "No hand sign detected"
+                    st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
 
-                if letter != "blank":
-                    st.session_state.sequence.append(letter)
+                    if letter != "blank":
+                        st.session_state.sequence.append(letter)
 
-                current = ''.join(st.session_state.sequence).upper()
-                longest_word = ''
-                for j in range(len(current), 1, -1):
-                    word = current[-j:]
-                    if word in nltk_words and len(word) > len(longest_word):
-                        longest_word = word
+                    current = ''.join(st.session_state.sequence).upper()
+                    longest_word = ''
+                    for j in range(len(current), 1, -1):
+                        word = current[-j:]
+                        if word in nltk_words and len(word) > len(longest_word):
+                            longest_word = word
 
-                if longest_word:
-                    st.markdown(f"🗣 Detected Word: **{longest_word}**")
-                    st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
+                    if longest_word:
+                        st.markdown(f"🗣 Detected Word: **{longest_word}**")
+                        st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
 
-                target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
-                if len(st.session_state.sequence) >= len(target_sequence):
-                    recent = st.session_state.sequence[-len(target_sequence):]
-                    if all(r == t for r, t in zip(recent, target_sequence)):
-                        st.success("🎉 Phrase Detected: HELLO WORLD")
-                        st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
-                        st.session_state.sequence = []
+                    target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
+                    if len(st.session_state.sequence) >= len(target_sequence):
+                        recent = st.session_state.sequence[-len(target_sequence):]
+                        if all(r == t for r, t in zip(recent, target_sequence)):
+                            st.success("🎉 Phrase Detected: HELLO WORLD")
+                            st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
+                            st.session_state.sequence = []
 
-        st.session_state.prev_landmarks = current_landmarks
+            st.session_state.prev_landmarks = current_landmarks
 
-        # ⏱️ Auto-refresh
-        time.sleep(REFRESH_INTERVAL)
-        st.experimental_rerun()
-    else:
-        st.warning("No image received. Is your webcam active?")
-    # Buttons to switch to modes
-    st.markdown("---")
-    if st.button("Try the snapshot version"):
-        st.switch_page("pages/app_snapshot.py")
-    if st.button("Try the image upload version"):
-        st.switch_page("pages/app_upload.py")
+            # ⏱️ Auto-refresh
+            time.sleep(REFRESH_INTERVAL)
+            st.experimental_rerun()
+        else:
+            st.warning("No image received. Is your webcam active?")
 
+            # Buttons to switch to modes
+            st.markdown("---")
+            if st.button("Try the snapshot version"):
+                st.switch_page("pages/app_snapshot.py")
+            if st.button("Try the image upload version"):
+                st.switch_page("pages/app_upload.py")
+
+# 🏁 Entry point
 if __name__ == '__main__':
     main()
