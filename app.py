@@ -44,34 +44,25 @@ def extract_landmark_array(hand_landmarks):
                     [lm.z for lm in hand_landmarks.landmark])
 
 def predict_image(image):
-    # Convert PIL image to NumPy array
     if isinstance(image, Image.Image):
-        image_np = np.array(image.convert("RGB"))  # Ensure RGB mode
-
+        image_np = np.array(image.convert("RGB"))
     elif isinstance(image, np.ndarray):
         image_np = image
         if image_np.shape[-1] == 4:
-            image_np = image_np[:, :, :3]  # Drop alpha if present
-
+            image_np = image_np[:, :, :3]
     else:
         raise ValueError("Unsupported image format")
 
-    # Ensure dtype is uint8
     image_np = image_np.astype(np.uint8)
-
-    # Process with MediaPipe
     results = hands.process(image_np)
 
     if not results.multi_hand_landmarks:
         return "blank", 0.0, [("blank", 1.0)], None
 
     hand_landmarks = results.multi_hand_landmarks[0]
-
-    # Optional: draw landmarks on a copy to avoid modifying original
     annotated_image = image_np.copy()
     mp_drawing.draw_landmarks(annotated_image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    # Prepare input for model
     landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
     prediction_probs = model.predict(landmark_array)[0]
     pred_index = np.argmax(prediction_probs)
@@ -88,17 +79,17 @@ def is_stable(current, previous, threshold=0.01):
     delta = np.linalg.norm(current - previous)
     return delta < threshold
 
+# 🚀 Main app
 def main():
-    # 🖼️ UI setup
     st.title("🖐️ Auto-Capture ASL Detector")
     st.markdown("Click below to start or stop live ASL detection from your webcam.")
 
-    # 🧠 Session state initialization
+    # 🧠 Session state setup
     for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
         if key not in st.session_state:
             st.session_state[key] = None if key == 'prev_landmarks' else []
 
-    # 🎛️ Start/Stop buttons
+    # ▶️ Start/Stop buttons
     col1, col2 = st.columns(2)
     with col1:
         if st.button("▶️ Start Live Predictions"):
@@ -111,10 +102,18 @@ def main():
             st.session_state.last_prediction = None
             st.info("Live prediction stopped. Click 'Start' to resume.")
 
+    # 🔄 Always show mode-switch buttons
+    st.markdown("---")
+    st.markdown("### 🧭 Switch Mode:")
+    if st.button("📸 Try the snapshot version"):
+        st.switch_page("pages/app_snapshot.py")
+    if st.button("🖼️ Try the image upload version"):
+        st.switch_page("pages/app_upload.py")
+
     # ⏱️ Refresh interval
     REFRESH_INTERVAL = 2
 
-    # 🚀 Main live loop
+    # 🎥 Live prediction loop
     if st.session_state.get('start_stream', False):
         image = camera_input_live()
         if image:
@@ -164,13 +163,6 @@ def main():
             st.experimental_rerun()
         else:
             st.warning("No image received. Is your webcam active?")
-
-            # Buttons to switch to modes
-            st.markdown("---")
-            if st.button("Try the snapshot version"):
-                st.switch_page("pages/app_snapshot.py")
-            if st.button("Try the image upload version"):
-                st.switch_page("pages/app_upload.py")
 
 # 🏁 Entry point
 if __name__ == '__main__':
