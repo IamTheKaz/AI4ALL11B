@@ -174,6 +174,3 @@ with col1:
 with col2:
     if st.button("🎬 Live Mode"):
         st.switch_page("app_live.py")
-
-if __name__ == '__main__':
-    main()
