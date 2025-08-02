@@ -46,23 +46,32 @@ def extract_landmark_array(hand_landmarks):
 def predict_image(image):
     # Convert PIL image to NumPy array
     if isinstance(image, Image.Image):
-        image_np = np.array(image)
-    else:
+        image_np = np.array(image.convert("RGB"))  # Ensure RGB mode
+
+    elif isinstance(image, np.ndarray):
         image_np = image
+        if image_np.shape[-1] == 4:
+            image_np = image_np[:, :, :3]  # Drop alpha if present
 
-    # Drop alpha channel if present
-    if image_np.shape[-1] == 4:
-        image_np = image_np[:, :, :3]
+    else:
+        raise ValueError("Unsupported image format")
 
-    # No need to convert color — already RGB
+    # Ensure dtype is uint8
+    image_np = image_np.astype(np.uint8)
+
+    # Process with MediaPipe
     results = hands.process(image_np)
 
     if not results.multi_hand_landmarks:
         return "blank", 0.0, [("blank", 1.0)], None
 
     hand_landmarks = results.multi_hand_landmarks[0]
-    mp_drawing.draw_landmarks(image_np, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
+    # Optional: draw landmarks on a copy to avoid modifying original
+    annotated_image = image_np.copy()
+    mp_drawing.draw_landmarks(annotated_image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+    # Prepare input for model
     landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
     prediction_probs = model.predict(landmark_array)[0]
     pred_index = np.argmax(prediction_probs)
