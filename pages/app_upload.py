@@ -173,4 +173,4 @@ with col1:
         st.switch_page("pages/app_snapshot.py")
 with col2:
     if st.button("🎬 Live Mode"):
-        st.switch_page("app_live.py")
+        st.switch_page("app.py")
