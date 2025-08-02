@@ -1,243 +1,174 @@
 import streamlit as st
 import numpy as np
-import tensorflow as tf
 import cv2
-import base64
-from tensorflow.keras.preprocessing.image import img_to_array
+import mediapipe as mp
+import tensorflow as tf
 from gtts import gTTS
-from io import BytesIO
-from camera_input_live import camera_input_live
+import base64
+import io
 import time
-from collections import deque
+from PIL import Image
+from nltk.corpus import words
+import nltk
+from camera_input_live import camera_input_live
 
-# Hide sidebar and set page config
-st.set_page_config(page_title="ASL Letter Predictor (Live Webcam)", initial_sidebar_state="collapsed")
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"] {display: none;}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# 📦 Ensure NLTK words are available
+nltk.download('words')
+nltk_words = set(words.words())
 
-# Setup
-IMG_HEIGHT, IMG_WIDTH = 32, 32
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['del', 'nothing', 'space']  # 29 classes
-TARGET_FPS = 3
-STABLE_FRAME_COUNT = 3
-CONFIDENCE_THRESHOLD = 0.7
-MAX_CONSECUTIVE = 2
+# 🧠 Load model and class names
+model = tf.keras.models.load_model("asl_model.h5")
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
 
+# 🖐️ MediaPipe setup
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
+mp_drawing = mp.solutions.drawing_utils
+
+# 🔊 Speech synthesis
 def speak_text(text):
-    tts = gTTS(text)
-    audio_buffer = BytesIO()
-    tts.write_to_fp(audio_buffer)
-    audio_buffer.seek(0)
-    return audio_buffer
+    tts = gTTS(text=text)
+    with io.BytesIO() as f:
+        tts.write_to_fp(f)
+        f.seek(0)
+        return f.read()
 
-@st.cache_resource
-def load_model():
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(32, 32, 1)),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D((2, 2)),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(1024, activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Dropout(0.6),
-        tf.keras.layers.Dense(512, activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Dropout(0.6),
-        tf.keras.layers.Dense(256, activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(len(CLASS_NAMES), activation='softmax')
-    ])
-    try:
-        model.load_weights("best_asl_model.h5")
-    except Exception as e:
-        st.error(f"Failed to load model weights: {e}")
-        st.stop()
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
+def get_audio_download_link(audio):
+    b64 = base64.b64encode(audio).decode()
+    return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-def preprocess(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (IMG_HEIGHT, IMG_WIDTH), interpolation=cv2.INTER_AREA)
-    img_array = img_to_array(resized) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+# 🧠 Prediction logic
+def extract_landmark_array(hand_landmarks):
+    return np.array([lm.x for lm in hand_landmarks.landmark] +
+                    [lm.y for lm in hand_landmarks.landmark] +
+                    [lm.z for lm in hand_landmarks.landmark])
 
-def is_stable_sign(prediction_buffer):
-    if len(prediction_buffer) < STABLE_FRAME_COUNT:
+def predict_image(image):
+    # Convert PIL image to NumPy array
+    if isinstance(image, Image.Image):
+        image_np = np.array(image.convert("RGB"))  # Ensure RGB mode
+
+    elif isinstance(image, np.ndarray):
+        image_np = image
+        if image_np.shape[-1] == 4:
+            image_np = image_np[:, :, :3]  # Drop alpha if present
+
+    else:
+        raise ValueError("Unsupported image format")
+
+    # Ensure dtype is uint8
+    image_np = image_np.astype(np.uint8)
+
+    # Process with MediaPipe
+    results = hands.process(image_np)
+
+    if not results.multi_hand_landmarks:
+        return "blank", 0.0, [("blank", 1.0)], None
+
+    hand_landmarks = results.multi_hand_landmarks[0]
+
+    # Optional: draw landmarks on a copy to avoid modifying original
+    annotated_image = image_np.copy()
+    mp_drawing.draw_landmarks(annotated_image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+    # Prepare input for model
+    landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
+    prediction_probs = model.predict(landmark_array)[0]
+    pred_index = np.argmax(prediction_probs)
+    prediction = CLASS_NAMES[pred_index]
+    confidence = prediction_probs[pred_index]
+    top_3 = [(CLASS_NAMES[i], prediction_probs[i]) for i in np.argsort(prediction_probs)[-3:][::-1]]
+
+    return prediction, confidence, top_3, extract_landmark_array(hand_landmarks)
+
+# 🧠 Stability check
+def is_stable(current, previous, threshold=0.01):
+    if previous is None:
         return False
-    letters = [pred['letter'] for pred in prediction_buffer]
-    confidences = [pred['confidence'] for pred in prediction_buffer]
-    return all(letter == letters[0] for letter in letters) and all(conf > CONFIDENCE_THRESHOLD for conf in confidences)
+    delta = np.linalg.norm(current - previous)
+    return delta < threshold
 
-def main():
-    st.title("🤟 ASL Letter Predictor (Live Webcam)")
-    st.markdown("Click below to begin live ASL detection from your webcam.")
+# 🖼️ UI setup
+st.title("🖐️ Auto-Capture ASL Detector")
+st.markdown("Click below to start or stop live ASL detection from your webcam.")
 
-    if 'sequence' not in st.session_state:
-        st.session_state.sequence = []
-    if 'last_letter' not in st.session_state:
-        st.session_state.last_letter = None
-    if 'last_confidence' not in st.session_state:
-        st.session_state.last_confidence = 0.0
-    if 'frame_count' not in st.session_state:
-        st.session_state.frame_count = 0
-    if 'last_frame_time' not in st.session_state:
-        st.session_state.last_frame_time = time.time()
-    if 'prediction_buffer' not in st.session_state:
-        st.session_state.prediction_buffer = deque(maxlen=STABLE_FRAME_COUNT)
-    if 'consecutive_count' not in st.session_state:
-        st.session_state.consecutive_count = 0
-    if 'current_letter' not in st.session_state:
-        st.session_state.current_letter = None
+# 🧠 Session state initialization
+for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
+    if key not in st.session_state:
+        st.session_state[key] = None if key == 'prev_landmarks' else []
 
-    if st.button("Start Live Predictions"):
+# 🎛️ Start/Stop buttons
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("▶️ Start Live Predictions"):
         st.session_state.start_stream = True
-    elif st.button("Stop Live Predictions"):
+with col2:
+    if st.button("⏹️ Stop Live Predictions"):
         st.session_state.start_stream = False
-        st.session_state.frame_count = 0
-        st.session_state.prediction_buffer.clear()
-        st.session_state.consecutive_count = 0
-        st.session_state.current_letter = None
-        st.info("Webcam feed stopped. Click 'Start Live Predictions' to restart.")
+        st.session_state.prev_landmarks = None
+        st.session_state.sequence = []
+        st.session_state.last_prediction = None
+        st.info("Live prediction stopped. Click 'Start' to resume.")
 
-    if st.session_state.get('start_stream', False):
-        frame_start_time = time.time()
-        model = load_model()
-        image_placeholder = st.empty()
-        status_placeholder = st.empty()
+# ⏱️ Refresh interval
+REFRESH_INTERVAL = 2
 
-        try:
-            image = camera_input_live()
-            if image is None:
-                raise Exception("No webcam input received")
-        except Exception as e:
-            st.error(f"Webcam access failed: {e}")
-            st.markdown(
-                """
-                **Troubleshooting**:
-                - Snapshot mode (`app_snapshot.py`) confirms webcam permissions.
-                - Ensure `camera_input_live.py` is in the repository root and compatible with Streamlit 1.39.0.
-                - Check Chrome (`chrome://settings/content/camera`) or Edge (`edge://settings/content/camera`).
-                - On Android, verify Settings > Apps > Streamlit > Permissions > Camera.
-                - Test webcam in another app (e.g., Zoom).
-                - Ensure no other app is using the webcam.
-                - Refresh the page and try again.
-                """,
-                unsafe_allow_html=True
-            )
-            st.session_state.start_stream = False
-            st.stop()
+# 🚀 Main live loop
+if st.session_state.get('start_stream', False):
+    image = camera_input_live()
+    if image:
+        st.image(image, caption="Live Preview", channels="RGB")
 
-        st.session_state.frame_count += 1
-        current_time = time.time()
-        frame_rate = 1 / (current_time - st.session_state.last_frame_time) if st.session_state.frame_count > 1 else 0
-        st.session_state.last_frame_time = current_time
+        image_np = np.array(image)
+        letter, confidence, top_3, current_landmarks = predict_image(image_np)
 
-        bytes_data = image.getvalue()
-        img_np = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+        if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
+            if letter != st.session_state.last_prediction:
+                st.session_state.last_prediction = letter
+                st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
-        if img_np is not None and img_np.size > 0:
-            image_placeholder.image(img_np, channels="BGR", caption="Live Webcam Feed")
+                st.markdown("#### 🔝 Top 3 Predictions:")
+                for i, (char, conf) in enumerate(top_3, 1):
+                    st.write(f"{i}. `{char}` — `{conf:.2f}`")
 
-            if st.session_state.frame_count % 3 == 0:
-                processed = preprocess(img_np)
-                try:
-                    predictions = model.predict(processed, verbose=0)
-                    predicted_idx = np.argmax(predictions[0])
-                    confidence = np.max(predictions[0])
-                    letter = CLASS_NAMES[predicted_idx]
+                spoken_text = letter if letter != "blank" else "No hand sign detected"
+                st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
 
-                    st.session_state.prediction_buffer.append({'letter': letter, 'confidence': confidence})
+                if letter != "blank":
+                    st.session_state.sequence.append(letter)
 
-                    if is_stable_sign(st.session_state.prediction_buffer):
-                        stable_letter = st.session_state.prediction_buffer[0]['letter']
-                        stable_confidence = st.session_state.prediction_buffer[0]['confidence']
+                current = ''.join(st.session_state.sequence).upper()
+                longest_word = ''
+                for j in range(len(current), 1, -1):
+                    word = current[-j:]
+                    if word in nltk_words and len(word) > len(longest_word):
+                        longest_word = word
 
-                        if stable_letter == st.session_state.current_letter:
-                            st.session_state.consecutive_count += 1
-                        else:
-                            st.session_state.consecutive_count = 1
-                            st.session_state.current_letter = stable_letter
+                if longest_word:
+                    st.markdown(f"🗣 Detected Word: **{longest_word}**")
+                    st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
 
-                        if st.session_state.consecutive_count <= MAX_CONSECUTIVE and stable_confidence > CONFIDENCE_THRESHOLD:
-                            st.session_state.sequence.append(stable_letter)
-                            st.session_state.last_letter = stable_letter
-                            st.session_state.last_confidence = stable_confidence
+                target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
+                if len(st.session_state.sequence) >= len(target_sequence):
+                    recent = st.session_state.sequence[-len(target_sequence):]
+                    if all(r == t for r, t in zip(recent, target_sequence)):
+                        st.success("🎉 Phrase Detected: HELLO WORLD")
+                        st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
+                        st.session_state.sequence = []
 
-                            cv2.putText(img_np, f"{stable_letter} ({stable_confidence:.2f})", (10, 30),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                            image_placeholder.image(img_np, channels="BGR", caption=f"Predicted: {stable_letter} ({stable_confidence:.2f})")
-                            status_placeholder.write(f"Frame Rate: {frame_rate:.2f} FPS | Frame Count: {st.session_state.frame_count}")
+        st.session_state.prev_landmarks = current_landmarks
 
-                            audio = speak_text(stable_letter)
-                            st.markdown(
-                                f'<audio autoplay src="data:audio/mp3;base64,{base64.b64encode(audio.read()).decode()}"></audio>',
-                                unsafe_allow_html=True
-                            )
-
-                    st.markdown("### 🔡 Letter Sequence")
-                    st.write(" → " + " ".join(st.session_state.sequence[-15:]))
-                except Exception as e:
-                    st.error(f"Prediction failed: {e}")
-        else:
-            st.warning("⚠️ Unable to decode webcam frame.")
-            st.markdown(
-                """
-                **Troubleshooting**:
-                - Snapshot mode confirms webcam functionality.
-                - Ensure `camera_input_live.py` is compatible.
-                - Test in Chrome or Edge, and try Android Chrome.
-                - Refresh the page.
-                """,
-                unsafe_allow_html=True
-            )
-
-        elapsed_time = time.time() - frame_start_time
-        sleep_time = max(0, (1 / TARGET_FPS) - elapsed_time)
-        time.sleep(sleep_time)
-
-    # --- Mode Switching Section ---
+        # ⏱️ Auto-refresh
+        time.sleep(REFRESH_INTERVAL)
+        st.experimental_rerun()
+    else:
+        st.warning("No image received. Is your webcam active?")
+    # Buttons to switch to modes
     st.markdown("---")
-    st.markdown("#### Try Alternate Input Modes:")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📷 Snapshot Version"):
-            st.switch_page("pages/app_snapshot.py")
-    with col2:
-        if st.button("🖼 Image Upload Version"):
-            st.switch_page("pages/app_upload.py")
+    if st.button("Try the snapshot version"):
+        st.switch_page("pages/app_snapshot.py")
+    if st.button("Try the image upload version"):
+        st.switch_page("pages/app_upload.py")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
