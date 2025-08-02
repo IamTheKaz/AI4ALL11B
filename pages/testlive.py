@@ -18,22 +18,21 @@ def extract_landmark_array(hand_landmarks):
                     [lm.y for lm in hand_landmarks.landmark] +
                     [lm.z for lm in hand_landmarks.landmark])
 
+def is_stable(current, previous, threshold=0.01):
+    if previous is None:
+        return False
+    return np.linalg.norm(current - previous) < threshold
+
 def predict_image(image_pil):
-    # Ensure it's a PIL Image
     if not isinstance(image_pil, Image.Image):
         image_pil = Image.open(image_pil)
 
-    # Convert to NumPy array
     image_np = np.array(image_pil)
 
-    # Drop alpha channel if present
     if image_np.shape[-1] == 4:
         image_np = image_np[:, :, :3]
 
-    # Convert RGB to BGR for OpenCV
     image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-
-    # Convert back to RGB for MediaPipe
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     results = hands.process(image_rgb)
 
@@ -55,6 +54,11 @@ def predict_image(image_pil):
 # Streamlit UI
 st.title("Live Hand Gesture Recognition")
 
+if "last_prediction" not in st.session_state:
+    st.session_state.last_prediction = ""
+if "previous_landmarks" not in st.session_state:
+    st.session_state.previous_landmarks = None
+
 image = st.camera_input("Show your hand to the camera")
 
 if image:
@@ -63,12 +67,16 @@ if image:
 
     letter, confidence, top_3, current_landmarks = predict_image(image_pil)
 
-    if current_landmarks is not None:
-        if letter != st.session_state.get("last_prediction", ""):
+    if current_landmarks is not None and is_stable(current_landmarks, st.session_state.previous_landmarks):
+        if letter != st.session_state.last_prediction:
             st.session_state.last_prediction = letter
             st.success(f"Predicted: {letter} ({confidence:.2f})")
             st.write("Top 3 Predictions:")
             for label, conf in top_3:
                 st.write(f"- {label}: {conf:.2f}")
     else:
-        st.warning("No hand detected. Try again.")
+        st.info("Waiting for stable hand position...")
+
+    st.session_state.previous_landmarks = current_landmarks
+else:
+    st.warning("No camera input detected.")    
