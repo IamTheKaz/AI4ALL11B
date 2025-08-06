@@ -42,7 +42,7 @@ def load_model():
     return tf.keras.models.load_model("asl_model.h5")
 
 model = load_model()
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
 
 # 🔊 Speech synthesis
 def speak_text(text):
@@ -84,6 +84,11 @@ def predict_image(image):
 
     landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
     prediction_probs = model.predict(landmark_array)[0]
+
+    # 🛡️ Defensive check
+    if len(prediction_probs) != len(CLASS_NAMES):
+        return "fallback", 0.0, [("fallback", 1.0)], extract_landmark_array(hand_landmarks)
+
     pred_index = np.argmax(prediction_probs)
     prediction = CLASS_NAMES[pred_index]
     confidence = prediction_probs[pred_index]
@@ -148,7 +153,7 @@ def main():
                 stable = is_stable(current_landmarks, prev_landmarks)
                 prev_landmarks = current_landmarks.copy()
 
-                if stable and letter != "blank":
+                if stable and letter not in ["blank", "fallback"]:
                     st.session_state.sequence.append(letter)
                     if len(st.session_state.sequence) > 50:
                         st.session_state.sequence = st.session_state.sequence[-50:]
