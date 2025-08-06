@@ -64,15 +64,7 @@ def extract_landmark_array(hand_landmarks):
 
 def predict_image(image):
     try:
-        if isinstance(image, Image.Image):
-            image_np = np.array(image.convert("RGB"))
-        elif isinstance(image, np.ndarray):
-            image_np = image
-            if image_np.shape[-1] == 4:
-                image_np = image_np[:, :, :3]
-        else:
-            return "fallback", 0.0, [("fallback", 1.0)], None
-
+        image_np = np.array(image.convert("RGB"))
         image_np = image_np.astype(np.uint8)
         results = hands.process(image_np)
 
@@ -126,16 +118,6 @@ def main():
             st.info("Live prediction stopped. Click 'Start' to resume.")
             st.empty().empty()
 
-    st.markdown("---")
-    st.markdown("### 🧭 Switch Mode:")
-    col3, col4 = st.columns(2)
-    with col3:
-        if st.button("📸 Snapshot Mode"):
-            st.switch_page("pages/app_snapshot.py")
-    with col4:
-        if st.button("🖼️ Upload Mode"):
-            st.switch_page("pages/app_upload.py")
-
     image_placeholder = st.empty()
     status_placeholder = st.empty()
     prev_landmarks = None
@@ -149,14 +131,14 @@ def main():
 
         try:
             if isinstance(image, Image.Image):
-                image_np = np.array(image.convert("RGB"))
-            elif isinstance(image, np.ndarray):
-                image_np = image
-                if image_np.shape[-1] == 4:
-                    image_np = image_np[:, :, :3]
+                pil_image = image
+            elif hasattr(image, "read"):
+                pil_image = Image.open(image)
             else:
                 status_placeholder.warning("⚠️ Unsupported image format.")
                 return
+
+            image_np = np.array(pil_image.convert("RGB"))
 
             if image_np.size == 0 or image_np.ndim != 3:
                 status_placeholder.warning("⚠️ Invalid image data. Skipping frame.")
@@ -164,7 +146,7 @@ def main():
 
             image_placeholder.image(image_np, caption="Live Preview", channels="RGB")
 
-            letter, confidence, top_3, current_landmarks = predict_image(image_np)
+            letter, confidence, top_3, current_landmarks = predict_image(pil_image)
 
             if current_landmarks is not None:
                 stable = is_stable(current_landmarks, prev_landmarks)
@@ -211,6 +193,17 @@ def main():
 
         except Exception:
             gc.collect()
+
+    # ✅ Mode-switch buttons (moved below camera)
+    st.markdown("---")
+    st.markdown("### 🧭 Switch Mode:")
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("📸 Snapshot Mode"):
+            st.switch_page("pages/app_snapshot.py")
+    with col4:
+        if st.button("🖼️ Upload Mode"):
+            st.switch_page("pages/app_upload.py")
 
 # 🏁 Entry point
 if __name__ == '__main__':
