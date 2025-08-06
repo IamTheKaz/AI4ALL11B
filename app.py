@@ -8,8 +8,9 @@ import base64
 import io
 import time
 from PIL import Image
-from nltk.corpus import words
 import nltk
+from nltk.corpus import words
+import gc
 from camera_input_live import camera_input_live
 
 # 🧼 Hide sidebar and set page config
@@ -24,16 +25,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 📦 Ensure NLTK words are available
-nltk.download('words')
-nltk_words = set(words.words())
+try:
+    nltk_words = set(words.words())
+except LookupError:
+    nltk.download('words')
+    nltk_words = set(words.words())
 
 # 🖐️ MediaPipe setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
 mp_drawing = mp.solutions.drawing_utils
 
-# 🧠 Load model and class names
-model = tf.keras.models.load_model("asl_model.h5")
+# 🧠 Load model with caching
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("asl_model.h5")
+
+model = load_model()
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank']
 
 # 🔊 Speech synthesis
@@ -96,11 +104,10 @@ def main():
     st.markdown("This app automatically captures and predicts ASL signs when your hand is stable.")
 
     # 🧠 Session state setup
-    for key in ['prev_landmarks', 'sequence', 'last_prediction', 'start_stream']:
-        if key not in st.session_state:
-            st.session_state[key] = None if key == 'prev_landmarks' else []
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
 
-    # ▶️ Start/Stop buttons (above mode buttons)
+    # ▶️ Start/Stop buttons
     st.markdown("### 🎬 Live Detection Controls")
     col1, col2 = st.columns(2)
     with col1:
@@ -109,12 +116,11 @@ def main():
     with col2:
         if st.button("⏹️ Stop Live Predictions"):
             st.session_state.start_stream = False
-            st.session_state.prev_landmarks = None
             st.session_state.sequence = []
-            st.session_state.last_prediction = None
             st.info("Live prediction stopped. Click 'Start' to resume.")
+            st.empty().empty()
 
-    # ✅ Always-visible mode-switch buttons
+    # ✅ Mode-switch buttons
     st.markdown("---")
     st.markdown("### 🧭 Switch Mode:")
     col3, col4 = st.columns(2)
@@ -125,9 +131,10 @@ def main():
         if st.button("🖼️ Upload Mode"):
             st.switch_page("pages/app_upload.py")
 
-    # 🎥 Live prediction loop using st.empty()
+    # 🎥 Live prediction loop
     image_placeholder = st.empty()
     status_placeholder = st.empty()
+    prev_landmarks = None
 
     if st.session_state.get('start_stream', False):
         image = camera_input_live()
@@ -137,20 +144,22 @@ def main():
             image_np = np.array(image)
             letter, confidence, top_3, current_landmarks = predict_image(image_np)
 
-            if current_landmarks is not None and is_stable(current_landmarks, st.session_state.prev_landmarks):
-                if letter != st.session_state.last_prediction:
-                    st.session_state.last_prediction = letter
-                    status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
+            if current_landmarks is not None:
+                stable = is_stable(current_landmarks, prev_landmarks)
+                prev_landmarks = current_landmarks.copy()
+
+                if stable and letter != "blank":
+                    st.session_state.sequence.append(letter)
+                    if len(st.session_state.sequence) > 50:
+                        st.session_state.sequence = st.session_state.sequence[-50:]
+
+                    st.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
                     st.markdown("#### 🔝 Top 3 Predictions:")
                     for i, (char, conf) in enumerate(top_3, 1):
                         st.write(f"{i}. `{char}` — `{conf:.2f}`")
 
-                    spoken_text = letter if letter != "blank" else "No hand sign detected"
-                    st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
-
-                    if letter != "blank":
-                        st.session_state.sequence.append(letter)
+                    st.markdown(get_audio_download_link(speak_text(letter)), unsafe_allow_html=True)
 
                     current = ''.join(st.session_state.sequence).upper()
                     longest_word = ''
@@ -171,7 +180,9 @@ def main():
                             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
                             st.session_state.sequence = []
 
-            st.session_state.prev_landmarks = current_landmarks
+            # 🧹 Clean up memory
+            del image_np, letter, confidence, top_3, current_landmarks
+            gc.collect()
 
 # 🏁 Entry point
 if __name__ == '__main__':
