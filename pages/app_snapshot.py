@@ -58,7 +58,7 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-# 🧠 Prediction logic
+# 🧠 Prediction logic with fallback protection
 def predict_image(image):
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = hands.process(image_rgb)
@@ -76,11 +76,12 @@ def predict_image(image):
     ).reshape(1, -1)
 
     prediction_probs = model.predict(input_array)[0]
-    pred_index = np.argmax(prediction_probs)
 
-    if pred_index >= len(CLASS_NAMES):
+    # 🛡️ Defensive check
+    if len(prediction_probs) != len(CLASS_NAMES):
         return "fallback", 0.0, [("fallback", 1.0)]
 
+    pred_index = np.argmax(prediction_probs)
     letter = CLASS_NAMES[pred_index]
     confidence = prediction_probs[pred_index]
     top_3 = [(CLASS_NAMES[i], prediction_probs[i]) for i in np.argsort(prediction_probs)[-3:][::-1]]
