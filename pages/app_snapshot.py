@@ -10,10 +10,14 @@ from PIL import Image
 import tempfile
 from nltk.corpus import words
 import nltk
+import gc
 
 # 📦 Setup
-nltk.download('words')
-nltk_words = set(words.words())
+try:
+    nltk_words = set(words.words())
+except LookupError:
+    nltk.download('words')
+    nltk_words = set(words.words())
 
 # 🧼 Hide sidebar and set page config
 st.set_page_config(page_title="ASL Snapshot Detector", layout="centered", initial_sidebar_state="collapsed")
@@ -32,7 +36,11 @@ hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_co
 mp_drawing = mp.solutions.drawing_utils
 
 # 🧠 Load model and class names
-model = tf.keras.models.load_model("asl_model.h5")
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("asl_model.h5")
+
+model = load_model()
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
 
 # 🔊 Speech synthesis
@@ -61,10 +69,11 @@ def predict_image(image):
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    x_vals = [lm.x for lm in hand_landmarks.landmark]
-    y_vals = [lm.y for lm in hand_landmarks.landmark]
-    z_vals = [lm.z for lm in hand_landmarks.landmark]
-    input_array = np.array(x_vals + y_vals + z_vals).reshape(1, -1)
+    input_array = np.array(
+        [lm.x for lm in hand_landmarks.landmark] +
+        [lm.y for lm in hand_landmarks.landmark] +
+        [lm.z for lm in hand_landmarks.landmark]
+    ).reshape(1, -1)
 
     prediction_probs = model.predict(input_array)[0]
     pred_index = np.argmax(prediction_probs)
@@ -83,7 +92,7 @@ def main():
     st.title("🤟 Snapshot ASL Detector")
     st.markdown("Capture a photo using your webcam to predict ASL letters. Try forming the phrase **HELLO WORLD**!")
 
-    # ✅ Always-visible mode-switch buttons
+    # ✅ Mode-switch buttons
     st.markdown("### 🧭 Switch Mode:")
     col1, col2 = st.columns(2)
     with col1:
@@ -123,6 +132,8 @@ def main():
 
         if letter not in ["blank", "fallback"]:
             st.session_state.sequence.append(letter)
+            if len(st.session_state.sequence) > 50:
+                st.session_state.sequence = st.session_state.sequence[-50:]
 
         current = ''.join([l.upper() for l in st.session_state.sequence])
         longest_word = ''
@@ -142,6 +153,10 @@ def main():
                 st.success("🎉 Phrase Detected: HELLO WORLD")
                 st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
                 st.session_state.sequence = []
+
+        # 🧹 Clean up memory
+        del image, letter, confidence, top_3, audio_buffer
+        gc.collect()
 
 # 🏁 Entry point
 if __name__ == "__main__":
