@@ -159,6 +159,3 @@ if st.checkbox("🪛 Show Raw Predictions (Debug)", value=False):
 if st.checkbox("📜 Show Sentence History", value=False):
     st.write(st.session_state.sentence)
 
-# 🏁 Entry point
-if __name__ == '__main__':
-    main()
