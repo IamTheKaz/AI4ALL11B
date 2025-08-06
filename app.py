@@ -68,6 +68,7 @@ def predict_image(image):
         results = hands.process(image_np)
 
         if not results.multi_hand_landmarks:
+            print("🔍 No hand landmarks detected.")
             return "blank", 0.0, [("blank", 1.0)], None
 
         hand_landmarks = results.multi_hand_landmarks[0]
@@ -75,23 +76,23 @@ def predict_image(image):
 
         landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
 
-        if landmark_array.shape != (1, 63):
-            raise ValueError(f"Unexpected landmark shape: {landmark_array.shape}")
-
         prediction_probs = model.predict(landmark_array)[0]
+        print(f"🧪 Prediction shape: {prediction_probs.shape}")
 
-        if np.isnan(prediction_probs).any() or len(prediction_probs) != len(CLASS_NAMES):
-            return "fallback", 0.0, [("fallback", 1.0)], extract_landmark_array(hand_landmarks)
+        if np.isnan(prediction_probs).any():
+            print("⚠️ Prediction contains NaNs — skipping frame.")
+            return "blank", 0.0, [("blank", 1.0)], extract_landmark_array(hand_landmarks)
 
         pred_index = np.argmax(prediction_probs)
         prediction = CLASS_NAMES[pred_index]
         confidence = prediction_probs[pred_index]
         top_3 = [(CLASS_NAMES[i], prediction_probs[i]) for i in np.argsort(prediction_probs)[-3:][::-1]]
 
+        print(f"✅ Predicted: {prediction} ({confidence:.2f})")
         return prediction, confidence, top_3, extract_landmark_array(hand_landmarks)
 
     except Exception as e:
-        print(f"Prediction error: {e}")
+        print(f"💥 Prediction error: {e}")
         gc.collect()
         return "fallback", 0.0, [("fallback", 1.0)], None
 
@@ -100,6 +101,7 @@ def is_stable(current, previous, threshold=0.02):
     if previous is None or current is None:
         return False
     delta = np.linalg.norm(current - previous)
+    print(f"🧪 Stability delta: {delta:.4f}")
     return delta < threshold
 
 # 🚀 Main app
@@ -155,8 +157,8 @@ def main():
             if stable:
                 if letter not in ["blank", "fallback"]:
                     st.session_state.sequence.append(letter)
-                    if len(st.session_state.sequence) > 50:
-                        st.session_state.sequence = st.session_state.sequence[-50:]
+                    if len(st.session_state.sequence) > 30:
+                        st.session_state.sequence = st.session_state.sequence[-30:]
 
                     status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
