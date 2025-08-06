@@ -64,8 +64,7 @@ def extract_landmark_array(hand_landmarks):
 
 def predict_image(image):
     try:
-        image_np = np.array(image.convert("RGB"))
-        image_np = image_np.astype(np.uint8)
+        image_np = np.array(image.convert("RGB")).astype(np.uint8)
         results = hands.process(image_np)
 
         if not results.multi_hand_landmarks:
@@ -75,9 +74,13 @@ def predict_image(image):
         mp_drawing.draw_landmarks(image_np, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
         landmark_array = extract_landmark_array(hand_landmarks).reshape(1, -1)
+
+        if landmark_array.shape != (1, 63):
+            raise ValueError(f"Unexpected landmark shape: {landmark_array.shape}")
+
         prediction_probs = model.predict(landmark_array)[0]
 
-        if len(prediction_probs) != len(CLASS_NAMES):
+        if np.isnan(prediction_probs).any() or len(prediction_probs) != len(CLASS_NAMES):
             return "fallback", 0.0, [("fallback", 1.0)], extract_landmark_array(hand_landmarks)
 
         pred_index = np.argmax(prediction_probs)
@@ -87,13 +90,14 @@ def predict_image(image):
 
         return prediction, confidence, top_3, extract_landmark_array(hand_landmarks)
 
-    except Exception:
+    except Exception as e:
+        print(f"Prediction error: {e}")
         gc.collect()
         return "fallback", 0.0, [("fallback", 1.0)], None
 
 # 🧠 Stability check
-def is_stable(current, previous, threshold=0.01):
-    if previous is None:
+def is_stable(current, previous, threshold=0.02):
+    if previous is None or current is None:
         return False
     delta = np.linalg.norm(current - previous)
     return delta < threshold
@@ -130,14 +134,7 @@ def main():
             return
 
         try:
-            if isinstance(image, Image.Image):
-                pil_image = image
-            elif hasattr(image, "read"):
-                pil_image = Image.open(image)
-            else:
-                status_placeholder.warning("⚠️ Unsupported image format.")
-                return
-
+            pil_image = Image.open(image) if hasattr(image, "read") else image
             image_np = np.array(pil_image.convert("RGB"))
 
             if image_np.size == 0 or image_np.ndim != 3:
@@ -148,53 +145,55 @@ def main():
 
             letter, confidence, top_3, current_landmarks = predict_image(pil_image)
 
-            if current_landmarks is not None:
-                stable = is_stable(current_landmarks, prev_landmarks)
-                prev_landmarks = current_landmarks.copy()
+            if current_landmarks is None:
+                status_placeholder.warning("⚠️ Hand detected but landmark extraction failed.")
+                return
 
-                if stable:
-                    if letter not in ["blank", "fallback"]:
-                        st.session_state.sequence.append(letter)
-                        if len(st.session_state.sequence) > 50:
-                            st.session_state.sequence = st.session_state.sequence[-50:]
+            stable = is_stable(current_landmarks, prev_landmarks)
+            prev_landmarks = current_landmarks.copy()
 
-                        status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
+            if stable:
+                if letter not in ["blank", "fallback"]:
+                    st.session_state.sequence.append(letter)
+                    if len(st.session_state.sequence) > 50:
+                        st.session_state.sequence = st.session_state.sequence[-50:]
 
-                        st.markdown("#### 🔝 Top 3 Predictions:")
-                        for i, (char, conf) in enumerate(top_3, 1):
-                            st.write(f"{i}. `{char}` — `{conf:.2f}`")
+                    status_placeholder.success(f"✋ Stable hand detected — predicted: `{letter}` ({confidence:.2f})")
 
-                        st.markdown(get_audio_download_link(speak_text(letter)), unsafe_allow_html=True)
+                    st.markdown("#### 🔝 Top 3 Predictions:")
+                    for i, (char, conf) in enumerate(top_3, 1):
+                        st.write(f"{i}. `{char}` — `{conf:.2f}`")
 
-                        current = ''.join(st.session_state.sequence).upper()
-                        longest_word = ''
-                        for j in range(len(current), 1, -1):
-                            word = current[-j:]
-                            if word in nltk_words and len(word) > len(longest_word):
-                                longest_word = word
+                    st.markdown(get_audio_download_link(speak_text(letter)), unsafe_allow_html=True)
 
-                        if longest_word:
-                            st.markdown(f"🗣 Detected Word: **{longest_word}**")
-                            st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
+                    current = ''.join(st.session_state.sequence).upper()
+                    longest_word = ''
+                    for j in range(len(current), 1, -1):
+                        word = current[-j:]
+                        if word in nltk_words and len(word) > len(longest_word):
+                            longest_word = word
 
-                        target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
-                        if len(st.session_state.sequence) >= len(target_sequence):
-                            recent = st.session_state.sequence[-len(target_sequence):]
-                            if all(r == t for r, t in zip(recent, target_sequence)):
-                                st.success("🎉 Phrase Detected: HELLO WORLD")
-                                st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
-                                st.session_state.sequence = []
-                    else:
-                        status_placeholder.warning("⚠️ Could not detect a hand sign. Try adjusting your hand position or lighting.")
+                    if longest_word:
+                        st.markdown(f"🗣 Detected Word: **{longest_word}**")
+                        st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
+
+                    target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
+                    if len(st.session_state.sequence) >= len(target_sequence):
+                        recent = st.session_state.sequence[-len(target_sequence):]
+                        if all(r == t for r, t in zip(recent, target_sequence)):
+                            st.success("🎉 Phrase Detected: HELLO WORLD")
+                            st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
+                            st.session_state.sequence = []
                 else:
-                    status_placeholder.info("✋ Waiting for stable hand position...")
+                    status_placeholder.warning("⚠️ Could not detect a hand sign. Try adjusting your hand position or lighting.")
             else:
-                status_placeholder.warning("⚠️ Could not detect a hand sign. Try adjusting your hand position or lighting.")
+                status_placeholder.info("✋ Waiting for stable hand position...")
 
-        except Exception:
+        except Exception as e:
+            status_placeholder.error(f"💥 Unexpected error: {e}")
             gc.collect()
 
-    # ✅ Mode-switch buttons (moved below camera)
+    # ✅ Mode-switch buttons
     st.markdown("---")
     st.markdown("### 🧭 Switch Mode:")
     col3, col4 = st.columns(2)
