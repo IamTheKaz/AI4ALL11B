@@ -34,25 +34,38 @@ def load_nltk_words():
 nltk_words = load_nltk_words()
 
 # 🖐️ MediaPipe setup
-mp_hands = mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
-mp_drawing = mp.solutions.drawing_utils
+try:
+    mp_hands = mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
+    mp_drawing = mp.solutions.drawing_utils
+except Exception as e:
+    st.error(f"Failed to initialize MediaPipe: {e}")
+    st.stop()
+
 IMG_SIZE = 224  # Match training image size
 
 # 🧠 Load model and class names
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("asl_model.h5")
+    try:
+        return tf.keras.models.load_model("asl_model.h5")
+    except Exception as e:
+        st.error(f"Failed to load model: {e}. Ensure 'asl_model.h5' is in the directory.")
+        st.stop()
 
 model = load_model()
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'Could not identify hand sign']
 
 # 🔊 Speech synthesis
 def speak_text(text):
-    tts = gTTS(text=text, lang='en')
-    with io.BytesIO() as f:
-        tts.write_to_fp(f)
-        f.seek(0)
-        return f.read()
+    try:
+        tts = gTTS(text=text, lang='en')
+        with io.BytesIO() as f:
+            tts.write_to_fp(f)
+            f.seek(0)
+            return f.read()
+    except Exception as e:
+        st.error(f"Speech synthesis failed: {e}")
+        return b''
 
 def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
@@ -60,23 +73,109 @@ def get_audio_download_link(audio):
 
 # 🧠 Prediction logic with preprocessing
 def predict_image(image):
-    # Resize and preprocess image
-    image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    # Hand detection
-    results = hands.process(image_rgb)
-    if not results.multi_hand_landmarks:
+    try:
+        # Resize and preprocess image
+        image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Hand detection
+        results = mp_hands.process(image_rgb)
+        if not results.multi_hand_landmarks:
+            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
+
+        hand_landmarks = results.multi_hand_landmarks[0]
+        mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+        # Extract and normalize landmarks
+        landmarks = np.array([
+            [lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark
+        ]).flatten()  # 63 features (21 points * 3 coords)
+
+        # Validate input shape
+        if landmarks.shape[0] != 63:
+            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
+
+        input_array = landmarks.reshape(1, -1)
+        with st.spinner("Predicting..."):
+            prediction_probs = model.predict(input_array, verbose=0)[0]
+
+        if len(prediction_probs) != len(CLASS_NAMES) - 1:  # Exclude 'Could not identify hand sign'
+            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
+
+        pred_index = np.argmax(prediction_probs)
+        letter = CLASS_NAMES[pred_index] if pred_index < len(CLASS_NAMES) - 1 else "Could not identify hand sign"
+        confidence = prediction_probs[pred_index] if pred_index < len(CLASS_NAMES) - 1 else 0.0
+
+        return letter, confidence, [(letter, confidence)]  # Only top prediction
+    except Exception as e:
+        st.error(f"Prediction failed: {e}")
         return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-    hand_landmarks = results.multi_hand_landmarks[0]
-    mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+# 🚀 Main app
+def main():
+    st.title("🤟 Snapshot ASL Detector")
+    st.markdown("Capture a photo using your webcam to predict ASL letters. Try forming the phrase **HELLO WORLD**!")
 
-    # Extract and normalize landmarks
-    landmarks = np.array([
-        [lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark
-    ]).flatten()  # 63 features (21 points * 3 coords)
+    # ✅ Mode-switch buttons
+    st.markdown("### 🧭 Switch Mode:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🎬 Live Mode"):
+            st.switch_page("app.py")
+    with col2:
+        if st.button("🖼️ Upload Mode"):
+            st.switch_page("pages/app_upload.py")
 
-    # Validate input shape
-    if landmarks.shape[0] != 63:
-        return "Could not identify hand sign",
+    # 🧠 Session state
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
+
+    # 📷 Webcam input
+    st.markdown("---")
+    st.subheader("Capture ASL Letter")
+    webcam_image = st.camera_input("Click below to capture")
+
+    if webcam_image:
+        # Use context manager for temporary file
+        with tempfile.NamedTemporaryFile(delete=True, suffix=".jpg") as tmp_file:
+            tmp_file.write(webcam_image.getvalue())
+            image = cv2.imread(tmp_file.name)
+
+        if image is None:
+            st.error("Failed to load image. Please try again.")
+            return
+
+        letter, confidence, _ = predict_image(image)
+
+        st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
+        st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+
+        spoken_text = "No hand sign detected" if letter == "Could not identify hand sign" else letter
+        audio_buffer = speak_text(spoken_text)
+        st.markdown(get_audio_download_link(audio_buffer), unsafe_allow_html=True)
+
+        if letter not in ["Could not identify hand sign"]:
+            st.session_state.sequence.append(letter)
+            if len(st.session_state.sequence) > 50:
+                st.session_state.sequence = st.session_state.sequence[-50:]
+
+        current = ''.join([l.upper() for l in st.session_state.sequence])
+        longest_word = max((word for j in range(len(current), 1, -1) 
+                          for word in [current[-j:]] if word in nltk_words), 
+                          key=len, default='')
+
+        if longest_word:
+            st.markdown(f"🗣 Detected Word: **{longest_word}**")
+            st.markdown(get_audio_download_link(speak_text(longest_word)), unsafe_allow_html=True)
+
+        target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
+        if len(st.session_state.sequence) >= len(target_sequence):
+            recent = st.session_state.sequence[-len(target_sequence):]
+            if all(r == t for r, t in zip(recent, target_sequence)):
+                st.success("🎉 Phrase Detected: HELLO WORLD")
+                st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
+                st.session_state.sequence = []
+
+# 🏁 Entry point
+if __name__ == "__main__":
+    main()
