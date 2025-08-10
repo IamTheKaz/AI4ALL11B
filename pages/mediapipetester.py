@@ -5,8 +5,10 @@ import numpy as np
 from PIL import Image
 import cv2
 
-st.title("🖐️ Hand Detection")
+st.set_page_config(page_title="Hand Detection", layout="centered")
+st.title("🖐️ MediaPipe Hand Detection")
 
+# Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False,
@@ -16,19 +18,34 @@ hands = mp_hands.Hands(
 )
 mp_draw = mp.solutions.drawing_utils
 
+# Capture image from webcam
 img_data = camera_input_live()
 
 if img_data:
-    image = Image.open(img_data)
+    # Convert to PIL image and force RGB mode
+    image = Image.open(img_data).convert("RGB")
+
+    # Convert to NumPy array
     image_np = np.array(image)
 
-    results = hands.process(image_np)
+    # Debug info
+    st.write(f"Image shape: {image_np.shape}")
+    st.write(f"Image dtype: {image_np.dtype}")
 
-    if results.multi_hand_landmarks:
-        for hand_landmarks in results.multi_hand_landmarks:
-            mp_draw.draw_landmarks(image_np, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-        st.success("Hand detected!")
+    # Check for 3-channel RGB
+    if image_np.ndim == 3 and image_np.shape[2] == 3:
+        # Run MediaPipe hand detection
+        results = hands.process(image_np)
+
+        # Draw landmarks if detected
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_draw.draw_landmarks(image_np, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+            st.success("Hand detected!")
+        else:
+            st.warning("No hand detected.")
+
+        # Display result
+        st.image(image_np, caption="Processed Frame", channels="RGB")
     else:
-        st.warning("No hand detected.")
-
-    st.image(image_np, caption="Processed Frame", channels="RGB")
+        st.error("Image is not 3-channel RGB. Cannot process.")
