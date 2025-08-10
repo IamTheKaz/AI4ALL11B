@@ -93,6 +93,11 @@ def normalize_landmarks(landmarks):
     points = points @ rot_matrix.T
     return points.flatten().reshape(1, -1)
 
+def get_finger_spread(landmarks):
+    # Index tip (8), middle tip (12), ring tip (16)
+    x_vals = [landmark.x for landmark in [landmarks[8], landmarks[12], landmarks[16]]]
+    return max(x_vals) - min(x_vals)
+
 # 🧠 Prediction logic with normalization
 def predict_image(image):
     try:
@@ -112,7 +117,9 @@ def predict_image(image):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         landmarks = normalize_landmarks(hand_landmarks.landmark)
-        input_array = np.array(landmarks).reshape(1, -1)
+        spread = get_finger_spread(hand_landmarks.landmark)
+        input_array = np.array(landmarks + [spread]).reshape(1, -1)
+        
 
         prediction_probs = model.predict(input_array, verbose=0)[0]
 
