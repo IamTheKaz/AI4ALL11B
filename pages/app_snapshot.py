@@ -155,17 +155,16 @@ def main():
             return
 
         letter, confidence, _ = predict_image(image)
+        # 🔍 Debug: Show snapshot image and shape
+        st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
+        st.write(f"📐 Image shape: `{image.shape}`")
 
- 	# 🔍 Debug: Show snapshot image and shape
-    	st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
-    	st.write(f"📐 Image shape: `{image.shape}`")
+        # 🔍 Debug: Show prediction details
+        st.write("🔍 Prediction Debug Info:")
+        st.write(f"Predicted letter: `{letter}`")
+        st.write(f"Confidence: `{confidence:.2f}`")
 
-    	# 🔍 Debug: Show prediction details
-    	st.write("🔍 Prediction Debug Info:")
-    	st.write(f"Predicted letter: `{letter}`")
-    	st.write(f"Confidence: `{confidence:.2f}`")
-
-	if letter != "Could not identify hand sign":
+        if letter != "Could not identify hand sign":
             results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             if results.multi_hand_landmarks:
                 hand_landmarks = results.multi_hand_landmarks[0]
