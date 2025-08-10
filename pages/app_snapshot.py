@@ -117,10 +117,12 @@ def predict_image(image):
             st.warning(f"🚫 Unexpected landmark shape: {landmarks_raw.shape}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        # ✅ Feature engineering
-        normalized = normalize_landmarks(hand_landmarks.landmark)
-        spread = get_finger_spread(hand_landmarks.landmark)
-        input_array = np.array(normalized + [spread]).reshape(1, -1)
+        # ✅ Feature engineering (fixed)
+        normalized = normalize_landmarks(hand_landmarks.landmark)  # shape (1, 63)
+        spread = get_finger_spread(hand_landmarks.landmark)        # scalar float
+
+        spread_array = np.array([[spread]])                        # shape (1, 1)
+        input_array = np.hstack((normalized, spread_array))        # shape (1, 64)
 
         if input_array.shape[1] != 64:
             st.warning(f"🚫 Input shape mismatch: expected 64, got {input_array.shape[1]}")
