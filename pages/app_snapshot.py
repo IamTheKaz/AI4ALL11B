@@ -104,35 +104,38 @@ def predict_image(image):
         image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # ✅ Use raw RGB for MediaPipe
         results = mp_hands_instance.process(image_rgb)
         if not results.multi_hand_landmarks:
+            st.warning("🚫 No hand landmarks detected.")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         hand_landmarks = results.multi_hand_landmarks[0]
         mp_drawing.draw_landmarks(image, hand_landmarks, HAND_CONNECTIONS)
 
-        landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark])
-        if landmarks.shape != (21, 3):
+        landmarks_raw = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark])
+        if landmarks_raw.shape != (21, 3):
+            st.warning(f"🚫 Unexpected landmark shape: {landmarks_raw.shape}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        landmarks = normalize_landmarks(hand_landmarks.landmark)
+        # ✅ Feature engineering
+        normalized = normalize_landmarks(hand_landmarks.landmark)
         spread = get_finger_spread(hand_landmarks.landmark)
-        input_array = np.array(landmarks + [spread]).reshape(1, -1)
-        
+        input_array = np.array(normalized + [spread]).reshape(1, -1)
+
+        if input_array.shape[1] != 64:
+            st.warning(f"🚫 Input shape mismatch: expected 64, got {input_array.shape[1]}")
+            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         prediction_probs = model.predict(input_array, verbose=0)[0]
 
-        # Get top 3 predictions
         top_indices = prediction_probs.argsort()[-3:][::-1]
         top_preds = [(CLASS_NAMES[i], prediction_probs[i]) for i in top_indices]
 
-        # Use top prediction for main label
         letter, confidence = top_preds[0]
-
         return letter, confidence, top_preds
+
     except Exception as e:
-        st.error(f"Prediction failed: {e}")
+        st.error(f"❌ Prediction failed: {e}")
         return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
 # 🚀 Main app
