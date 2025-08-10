@@ -11,7 +11,7 @@ import tempfile
 from nltk.corpus import words
 import nltk
 
-# 🧼 Hide sidebar and set page config (must be first Streamlit command)
+# 🧼 Hide sidebar and set page config
 st.set_page_config(page_title="ASL Snapshot Detector", layout="centered", initial_sidebar_state="collapsed")
 st.markdown("""
     <style>
@@ -36,7 +36,7 @@ nltk_words = load_nltk_words()
 # 🖐️ MediaPipe setup
 try:
     mp_hands = mp.solutions.hands
-    mp_hands_instance = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)  # Dynamic mode, lower confidence
+    mp_hands_instance = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)
     mp_drawing = mp.solutions.drawing_utils
     HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)
     if HAND_CONNECTIONS is None:
@@ -45,7 +45,7 @@ except Exception as e:
     st.error(f"MediaPipe initialization failed: {e}")
     st.stop()
 
-IMG_SIZE = 224  # Match training image size
+IMG_SIZE = 224
 
 # 🧠 Load model and class names
 @st.cache_resource
@@ -75,15 +75,23 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-# 🧠 Prediction logic with preprocessing
+# 🧠 Normalize landmarks
+def normalize_landmarks(landmarks):
+    x_vals = landmarks[:, 0]
+    y_vals = landmarks[:, 1]
+    min_x, max_x = np.min(x_vals), np.max(x_vals)
+    min_y, max_y = np.min(y_vals), np.max(y_vals)
+    landmarks[:, 0] = (x_vals - min_x) / (max_x - min_x + 1e-6)
+    landmarks[:, 1] = (y_vals - min_y) / (max_y - min_y + 1e-6)
+    return landmarks
+
+# 🧠 Prediction logic with normalization
 def predict_image(image):
     try:
-        # Preprocess image for better detection
         image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_rgb = cv2.convertScaleAbs(image_rgb, alpha=1.5, beta=0)  # Enhance contrast
-        
-        # Hand detection
+        image_rgb = cv2.convertScaleAbs(image_rgb, alpha=1.5, beta=0)
+
         results = mp_hands_instance.process(image_rgb)
         if not results.multi_hand_landmarks:
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
@@ -92,27 +100,26 @@ def predict_image(image):
         if HAND_CONNECTIONS is not None:
             mp_drawing.draw_landmarks(image, hand_landmarks, HAND_CONNECTIONS)
 
-        # Extract and normalize landmarks
-        landmarks = np.array([
-            [lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark
-        ]).flatten()  # 63 features (21 points * 3 coords)
-
-        # Validate input shape
-        if landmarks.shape[0] != 63:
+        landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark])
+        if landmarks.shape != (21, 3):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        input_array = landmarks.reshape(1, -1)
+        landmarks = normalize_landmarks(landmarks)
+        input_array = landmarks.flatten().reshape(1, -1)
+
         with st.spinner("Predicting..."):
             prediction_probs = model.predict(input_array, verbose=0)[0]
 
-        if len(prediction_probs) != len(CLASS_NAMES) - 1:  # Exclude 'Could not identify hand sign'
+        if len(prediction_probs) != len(CLASS_NAMES) - 1:
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         pred_index = np.argmax(prediction_probs)
-        letter = CLASS_NAMES[pred_index] if pred_index < len(CLASS_NAMES) - 1 else "Could not identify hand sign"
-        confidence = prediction_probs[pred_index] if pred_index < len(CLASS_NAMES) - 1 else 0.0
+        confidence = prediction_probs[pred_index]
+        if confidence < 0.75:
+            return "Could not identify hand sign", confidence, [("Could not identify hand sign", confidence)]
 
-        return letter, confidence, [(letter, confidence)]  # Only top prediction
+        letter = CLASS_NAMES[pred_index]
+        return letter, confidence, [(letter, confidence)]
     except Exception as e:
         st.error(f"Prediction failed: {e}")
         return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
@@ -127,45 +134,32 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🎬 Live Mode"):
-            st.switch_page("app.py")
+            st.switch_page("pages/app_live.py")
     with col2:
         if st.button("🖼️ Upload Mode"):
             st.switch_page("pages/app_upload.py")
 
-    # User guidance
     st.markdown("Tip: Use good lighting, hold hand steady, and position it clearly in the frame for better detection.")
 
-    # 🧠 Session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
 
-    # 📷 Webcam input
     st.markdown("---")
     st.subheader("Capture ASL Letter")
     webcam_image = st.camera_input("Click below to capture")
 
     if webcam_image:
-        # Use context manager for temporary file
         with tempfile.NamedTemporaryFile(delete=True, suffix=".jpg") as tmp_file:
             tmp_file.write(webcam_image.getvalue())
             image = cv2.imread(tmp_file.name)
-            
-            # 🧪 Diagnostic: Check raw image properties
-            st.write(f"🧪 Image dtype: `{image.dtype}`")
-            st.write(f"🧪 Min pixel value: `{image.min()}`")
-            st.write(f"🧪 Max pixel value: `{image.max()}`")
-            st.image(image, caption="📷 Raw Input Image", channels="BGR")
 
-            # 🧪 Optional: Enhance contrast for MediaPipe
+            st.image(image, caption="📷 Raw Input Image", channels="BGR")
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=20)
             image_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
 
-            # 🧪 Run MediaPipe detection directly
             results = mp_hands_instance.process(image_rgb)
             st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
-
-            # Optional: visualize enhanced image
             st.image(image_rgb, caption="🖼️ Enhanced Image for Detection", channels="RGB")
 
         if image is None:
@@ -173,11 +167,8 @@ def main():
             return
 
         letter, confidence, _ = predict_image(image)
-        # 🔍 Debug: Show snapshot image and shape
         st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
         st.write(f"📐 Image shape: `{image.shape}`")
-
-        # 🔍 Debug: Show prediction details
         st.write("🔍 Prediction Debug Info:")
         st.write(f"Predicted letter: `{letter}`")
         st.write(f"Confidence: `{confidence:.2f}`")
@@ -203,8 +194,8 @@ def main():
                 st.session_state.sequence = st.session_state.sequence[-50:]
 
         current = ''.join([l.upper() for l in st.session_state.sequence])
-        longest_word = max((word for j in range(len(current), 1, -1) 
-                          for word in [current[-j:]] if word in nltk_words), 
+        longest_word = max((word for j in range(len(current), 1, -1)
+                          for word in [current[-j:]] if word in nltk_words),
                           key=len, default='')
 
         if longest_word:
