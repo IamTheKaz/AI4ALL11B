@@ -38,17 +38,14 @@ try:
     mp_hands = mp.solutions.hands
     mp_hands_instance = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
     mp_drawing = mp.solutions.drawing_utils
-    # Explicitly test HAND_CONNECTIONS
     HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)
     if HAND_CONNECTIONS is None:
-        st.warning("HAND_CONNECTIONS not detected. Please ensure MediaPipe is correctly installed. Landmark drawing will be disabled.")
-    else:
-        st.write("Landmark drawing enabled.")
+        st.warning("HAND_CONNECTIONS not detected. Landmark drawing will be disabled.")
 except Exception as e:
     st.error(f"MediaPipe initialization failed: {e}")
     st.stop()
 
-IMG_SIZE = 224  # Match training image size
+IMG_SIZE = 224  # Reduced from potential higher default if needed
 
 # 🧠 Load model and class names
 @st.cache_resource
@@ -104,8 +101,12 @@ def predict_image(image):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         input_array = landmarks.reshape(1, -1)
-        with st.spinner("Predicting..."):
-            prediction_probs = model.predict(input_array, verbose=0)[0]
+        if 'last_prediction_time' not in st.session_state or (time.time() - st.session_state.last_prediction_time) > 1.0:
+            with st.spinner("Predicting..."):
+                prediction_probs = model.predict(input_array, verbose=0)[0]
+            st.session_state.last_prediction_time = time.time()
+        else:
+            return st.session_state.get('last_letter', "Could not identify hand sign"), 0.0, [("Could not identify hand sign", 1.0)]
 
         if len(prediction_probs) != len(CLASS_NAMES) - 1:  # Exclude 'Could not identify hand sign'
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
@@ -113,11 +114,14 @@ def predict_image(image):
         pred_index = np.argmax(prediction_probs)
         letter = CLASS_NAMES[pred_index] if pred_index < len(CLASS_NAMES) - 1 else "Could not identify hand sign"
         confidence = prediction_probs[pred_index] if pred_index < len(CLASS_NAMES) - 1 else 0.0
+        st.session_state.last_letter = letter
 
         return letter, confidence, [(letter, confidence)]  # Only top prediction
     except Exception as e:
         st.error(f"Prediction failed: {e}")
         return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
+
+import time  # Added for timing
 
 # 🚀 Main app
 def main():
@@ -137,6 +141,8 @@ def main():
     # 🧠 Session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
+    if 'last_prediction_time' not in st.session_state:
+        st.session_state.last_prediction_time = 0.0
 
     # 📷 Webcam input
     st.markdown("---")
