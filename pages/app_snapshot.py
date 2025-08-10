@@ -116,19 +116,14 @@ def predict_image(image):
 
         prediction_probs = model.predict(input_array, verbose=0)[0]
 
-        # 🧪 Debug: Inspect input and output
-        st.write("🧪 Normalized landmarks shape:", input_array.shape)
-        st.write("🧪 Sample input values:", input_array[0][:10])  # First 10 values
-        st.write("🧪 Prediction probabilities:", prediction_probs.tolist())
+        # Get top 3 predictions
+        top_indices = prediction_probs.argsort()[-3:][::-1]
+        top_preds = [(CLASS_NAMES[i], prediction_probs[i]) for i in top_indices]
 
-        pred_index = np.argmax(prediction_probs)
-        confidence = prediction_probs[pred_index]
+        # Use top prediction for main label
+        letter, confidence = top_preds[0]
 
-        if confidence < 0.75:
-            return "Could not identify hand sign", confidence, [("Could not identify hand sign", confidence)]
-
-        letter = CLASS_NAMES[pred_index]
-        return letter, confidence, [(letter, confidence)]
+        return letter, confidence, top_preds
     except Exception as e:
         st.error(f"Prediction failed: {e}")
         return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
