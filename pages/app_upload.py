@@ -218,14 +218,11 @@ if uploaded_file:
             st.session_state.sequence = []
 
     # Filter training samples for label 'L'
-    l_samples = df_landmarks[df_landmarks["label"] == "L"].drop(columns=["label", "source"])
-    l_vectors = l_samples.values
+    l_samples = df_landmarks[df_landmarks["label"] == "L"].drop(columns=["label"])
+    
 
-    # Compute cosine similarity
     from sklearn.metrics.pairwise import cosine_similarity
-    similarities = cosine_similarity(input_array, l_vectors)
-
-    # Show top match
+    similarities = cosine_similarity(input_array, l_samples.values)
     st.markdown(f"🔍 Cosine similarity to training 'L' samples: `{similarities.max():.4f}`")
 
     if letter != "blank":
