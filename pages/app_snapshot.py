@@ -112,8 +112,8 @@ def predict_image(image):
         if landmarks.shape != (21, 3):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        landmarks = normalize_landmarks(landmarks)
-        input_array = landmarks.flatten().reshape(1, -1)
+        landmarks = normalize_landmarks(hand_landmarks.landmark)
+        input_array = np.array(landmarks).reshape(1, -1)
 
         prediction_probs = model.predict(input_array, verbose=0)[0]
 
