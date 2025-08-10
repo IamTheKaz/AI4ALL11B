@@ -76,16 +76,22 @@ def get_audio_download_link(audio):
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
 def normalize_landmarks(landmarks):
-    x_vals = landmarks[:, 0]
-    y_vals = landmarks[:, 1]
+    WRIST_IDX = 0
+    MIDDLE_MCP_IDX = 9
 
-    min_x, max_x = np.min(x_vals), np.max(x_vals)
-    min_y, max_y = np.min(y_vals), np.max(y_vals)
+    points = np.array([[lm.x, lm.y, lm.z] for lm in landmarks])
+    origin = points[WRIST_IDX]
+    points -= origin
 
-    landmarks[:, 0] = (x_vals - min_x) / (max_x - min_x + 1e-6)
-    landmarks[:, 1] = (y_vals - min_y) / (max_y - min_y + 1e-6)
-
-    return landmarks
+    ref_point = points[MIDDLE_MCP_IDX]
+    angle = np.arctan2(ref_point[1], ref_point[0])
+    rot_matrix = np.array([
+        [np.cos(-angle), -np.sin(-angle), 0],
+        [np.sin(-angle),  np.cos(-angle), 0],
+        [0,               0,              1]
+    ])
+    points = points @ rot_matrix.T
+    return points.flatten().reshape(1, -1)
 
 # 🧠 Prediction logic with normalization
 def predict_image(image):
