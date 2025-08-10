@@ -75,14 +75,16 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
-# 🧠 Normalize landmarks
 def normalize_landmarks(landmarks):
     x_vals = landmarks[:, 0]
     y_vals = landmarks[:, 1]
+
     min_x, max_x = np.min(x_vals), np.max(x_vals)
     min_y, max_y = np.min(y_vals), np.max(y_vals)
+
     landmarks[:, 0] = (x_vals - min_x) / (max_x - min_x + 1e-6)
     landmarks[:, 1] = (y_vals - min_y) / (max_y - min_y + 1e-6)
+
     return landmarks
 
 # 🧠 Prediction logic with normalization
