@@ -170,7 +170,7 @@ def main():
                 hand_landmarks = results.multi_hand_landmarks[0]
                 landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
                 st.write("🧠 Hand landmarks (flattened):")
-            	st.write(landmarks.tolist())
+                st.write(landmarks.tolist())
 
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
