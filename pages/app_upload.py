@@ -8,6 +8,10 @@ import io
 import tensorflow as tf
 from nltk.corpus import words
 import nltk
+import zipfile
+import io
+import requests
+import pandas as pd
 
 # 📦 Setup
 nltk.download('words')
@@ -33,6 +37,16 @@ mp_drawing = mp.solutions.drawing_utils
 model = tf.keras.models.load_model("asl_model.h5")
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'fallback']
 
+# 📦 Load zipped dataset from GitHub
+@st.cache_data
+def load_dataset():
+    url = "https://github.com/IamTheKaz/AI4ALL11B/raw/main/hand_landmarks.zip"
+    response = requests.get(url)
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        with z.open("hand_landmarks.csv") as f:
+            return pd.read_csv(f)
+
+df_landmarks = load_dataset()
 # 🔊 Speech synthesis
 def speak_text_input(letter):
     return "No hand sign detected" if letter == "blank" else letter
@@ -102,7 +116,7 @@ def predict_image(image):
     confidence = round(prediction_probs[pred_index], 2)
     top_3 = [(CLASS_NAMES[i], round(prediction_probs[i], 2)) for i in np.argsort(prediction_probs)[-3:][::-1]]
 
-    return prediction, confidence, top_3
+    return prediction, confidence, top_3, input_array
 
 # 🚀 Main app
 st.title("🤟 Upload ASL Detector")
@@ -157,7 +171,7 @@ if 'sequence' not in st.session_state:
 if uploaded_file:
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, 1)
-    letter, confidence, top_3 = predict_image(image)
+    letter, confidence, top_3, input_array = predict_image(image)
 
     st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
     st.markdown(f"### ✅ Detected Letter: `{letter.upper()}`")
@@ -191,6 +205,9 @@ if uploaded_file:
             st.success("🎉 Phrase Detected: HELLO WORLD")
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
+
+st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
+st.write(input_array)
 
 # 🧭 Mode-switch buttons
 st.markdown("---")
