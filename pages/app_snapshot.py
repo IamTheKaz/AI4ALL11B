@@ -105,8 +105,7 @@ def predict_image(image):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         hand_landmarks = results.multi_hand_landmarks[0]
-        if HAND_CONNECTIONS is not None:
-            mp_drawing.draw_landmarks(image, hand_landmarks, HAND_CONNECTIONS)
+        mp_drawing.draw_landmarks(image, hand_landmarks, HAND_CONNECTIONS)
 
         landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark])
         if landmarks.shape != (21, 3):
