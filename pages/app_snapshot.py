@@ -37,6 +37,9 @@ nltk_words = load_nltk_words()
 try:
     mp_hands = mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
     mp_drawing = mp.solutions.drawing_utils
+    HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)  # Fallback if HAND_CONNECTIONS is missing
+    if HAND_CONNECTIONS is None:
+        st.warning("HAND_CONNECTIONS not found in MediaPipe. Landmarks will not be drawn.")
 except Exception as e:
     st.error(f"Failed to initialize MediaPipe: {e}")
     st.stop()
@@ -84,7 +87,8 @@ def predict_image(image):
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         hand_landmarks = results.multi_hand_landmarks[0]
-        mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+        if HAND_CONNECTIONS is not None:
+            mp_drawing.draw_landmarks(image, hand_landmarks, HAND_CONNECTIONS)
 
         # Extract and normalize landmarks
         landmarks = np.array([
