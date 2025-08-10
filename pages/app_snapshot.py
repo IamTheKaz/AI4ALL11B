@@ -35,13 +35,17 @@ nltk_words = load_nltk_words()
 
 # 🖐️ MediaPipe setup
 try:
-    mp_hands = mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
+    mp_hands = mp.solutions.hands
+    mp_hands_instance = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
     mp_drawing = mp.solutions.drawing_utils
-    HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)  # Fallback if HAND_CONNECTIONS is missing
+    # Explicitly test HAND_CONNECTIONS
+    HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)
     if HAND_CONNECTIONS is None:
-        st.warning("HAND_CONNECTIONS not found in MediaPipe. Landmarks will not be drawn.")
+        st.warning("HAND_CONNECTIONS not detected. Please ensure MediaPipe is correctly installed. Landmark drawing will be disabled.")
+    else:
+        st.write("Landmark drawing enabled.")
 except Exception as e:
-    st.error(f"Failed to initialize MediaPipe: {e}")
+    st.error(f"MediaPipe initialization failed: {e}")
     st.stop()
 
 IMG_SIZE = 224  # Match training image size
@@ -82,7 +86,7 @@ def predict_image(image):
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
         # Hand detection
-        results = mp_hands.process(image_rgb)
+        results = mp_hands_instance.process(image_rgb)
         if not results.multi_hand_landmarks:
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
