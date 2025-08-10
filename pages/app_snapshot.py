@@ -149,6 +149,24 @@ def main():
         with tempfile.NamedTemporaryFile(delete=True, suffix=".jpg") as tmp_file:
             tmp_file.write(webcam_image.getvalue())
             image = cv2.imread(tmp_file.name)
+            
+            # 🧪 Diagnostic: Check raw image properties
+            st.write(f"🧪 Image dtype: `{image.dtype}`")
+            st.write(f"🧪 Min pixel value: `{image.min()}`")
+            st.write(f"🧪 Max pixel value: `{image.max()}`")
+            st.image(image, caption="📷 Raw Input Image", channels="BGR")
+
+            # 🧪 Optional: Enhance contrast for MediaPipe
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=20)
+            image_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
+
+            # 🧪 Run MediaPipe detection directly
+            results = mp_hands_instance.process(image_rgb)
+            st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
+
+            # Optional: visualize enhanced image
+            st.image(image_rgb, caption="🖼️ Enhanced Image for Detection", channels="RGB")
 
         if image is None:
             st.error("Failed to load image. Please try again.")
