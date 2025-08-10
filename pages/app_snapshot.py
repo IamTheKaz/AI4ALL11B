@@ -36,7 +36,7 @@ nltk_words = load_nltk_words()
 # 🖐️ MediaPipe setup
 try:
     mp_hands = mp.solutions.hands
-    mp_hands_instance = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)  # Dynamic mode, lower confidence
+    mp_hands_instance = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)  # Dynamic mode, lower confidence
     mp_drawing = mp.solutions.drawing_utils
     HAND_CONNECTIONS = getattr(mp_hands, 'HAND_CONNECTIONS', None)
     if HAND_CONNECTIONS is None:
