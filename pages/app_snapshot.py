@@ -166,14 +166,12 @@ def main():
     	st.write(f"Confidence: `{confidence:.2f}`")
 
 	if letter != "Could not identify hand sign":
-        	results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        	if results.multi_hand_landmarks:
-        		hand_landmarks = results.multi_hand_landmarks[0]
-        		landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
-        		st.write("🧠 Hand landmarks (flattened):")
-            		st.write(landmarks.tolist())
-
-
+            results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0]
+        	landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
+        	st.write("🧠 Hand landmarks (flattened):")
+            	st.write(landmarks.tolist())
 
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
