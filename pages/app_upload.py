@@ -26,7 +26,7 @@ st.markdown("""
 
 # 🖐️ MediaPipe setup
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7)
+hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)
 mp_drawing = mp.solutions.drawing_utils
 
 # 🧠 Load model and class names
@@ -48,10 +48,35 @@ def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
 
+def normalize_landmarks(landmarks):
+    WRIST_IDX = 0
+    MIDDLE_MCP_IDX = 9
+
+    points = np.array([[lm.x, lm.y, lm.z] for lm in landmarks])
+    origin = points[WRIST_IDX]
+    points -= origin
+
+    ref_point = points[MIDDLE_MCP_IDX]
+    angle = np.arctan2(ref_point[1], ref_point[0])
+    rot_matrix = np.array([
+        [np.cos(-angle), -np.sin(-angle), 0],
+        [np.sin(-angle),  np.cos(-angle), 0],
+        [0,               0,              1]
+    ])
+    points = points @ rot_matrix.T
+    return points.flatten().reshape(1, -1)
+
+def get_finger_spread(landmarks):
+    x_vals = [landmarks[8].x, landmarks[12].x, landmarks[16].x]
+    return max(x_vals) - min(x_vals)
+
 # 🧠 Prediction logic
 def predict_image(image):
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=20)
+    image_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
     results = hands.process(image_rgb)
+    
 
     if not results.multi_hand_landmarks:
         return "blank", 0.0, [("blank", 1.0)]
@@ -59,10 +84,13 @@ def predict_image(image):
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-    x_vals = [lm.x for lm in hand_landmarks.landmark]
-    y_vals = [lm.y for lm in hand_landmarks.landmark]
-    z_vals = [lm.z for lm in hand_landmarks.landmark]
-    input_array = np.array(x_vals + y_vals + z_vals).reshape(1, -1)
+    normalized = normalize_landmarks(hand_landmarks.landmark)  # shape (1, 63)
+    spread = get_finger_spread(hand_landmarks.landmark)        # scalar float
+    spread_array = np.array([[spread]])                        # shape (1, 1)
+    input_array = np.hstack((normalized, spread_array))        # shape (1, 64)
+
+    st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
+    st.write(f"✅ Final input shape: {input_array.shape}")
 
     prediction_probs = model.predict(input_array)[0]
     pred_index = np.argmax(prediction_probs)
@@ -174,3 +202,5 @@ with col1:
 with col2:
     if st.button("🎬 Live Mode"):
         st.switch_page("app.py")
+if __name__ == '__main__':
+    main()
