@@ -145,36 +145,36 @@ def main():
     webcam_image = st.camera_input("Click below to capture")
 
     if webcam_image:
-    # Use context manager for temporary file
-    with tempfile.NamedTemporaryFile(delete=True, suffix=".jpg") as tmp_file:
-        tmp_file.write(webcam_image.getvalue())
-        image = cv2.imread(tmp_file.name)
+        # Use context manager for temporary file
+        with tempfile.NamedTemporaryFile(delete=True, suffix=".jpg") as tmp_file:
+            tmp_file.write(webcam_image.getvalue())
+            image = cv2.imread(tmp_file.name)
 
-    if image is None:
-        st.error("Failed to load image. Please try again.")
-        return
+        if image is None:
+            st.error("Failed to load image. Please try again.")
+            return
 
-    letter, confidence, _ = predict_image(image)
+        letter, confidence, _ = predict_image(image)
 
-    # 🔍 Debug: Show snapshot image and shape
-    st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
-    st.write(f"📐 Image shape: `{image.shape}`")
+ 	# 🔍 Debug: Show snapshot image and shape
+    	st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
+    	st.write(f"📐 Image shape: `{image.shape}`")
 
-    # 🔍 Debug: Show prediction details
-    st.write("🔍 Prediction Debug Info:")
-    st.write(f"Predicted letter: `{letter}`")
-    st.write(f"Confidence: `{confidence:.2f}`")
+    	# 🔍 Debug: Show prediction details
+    	st.write("🔍 Prediction Debug Info:")
+    	st.write(f"Predicted letter: `{letter}`")
+    	st.write(f"Confidence: `{confidence:.2f}`")
 
-    # 🧠 Optional: Show raw landmarks if prediction was successful
-    if letter != "Could not identify hand sign":
-        results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        if results.multi_hand_landmarks:
-            hand_landmarks = results.multi_hand_landmarks[0]
-            landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
-            st.write("🧠 Hand landmarks (flattened):")
-            st.write(landmarks.tolist())
+	if letter != "Could not identify hand sign":
+        	results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        	if results.multi_hand_landmarks:
+        		hand_landmarks = results.multi_hand_landmarks[0]
+        		landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
+        		st.write("🧠 Hand landmarks (flattened):")
+            		st.write(landmarks.tolist())
 
-    
+
+
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
 
