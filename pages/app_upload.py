@@ -206,8 +206,8 @@ if uploaded_file:
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
 
-st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
-st.write(input_array)
+    st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
+    st.write(input_array)
 
 # 🧭 Mode-switch buttons
 st.markdown("---")
