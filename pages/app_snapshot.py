@@ -90,8 +90,8 @@ def predict_image(image):
     try:
         image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_rgb = cv2.convertScaleAbs(image_rgb, alpha=1.5, beta=0)
 
+        # ✅ Use raw RGB for MediaPipe
         results = mp_hands_instance.process(image_rgb)
         if not results.multi_hand_landmarks:
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
@@ -107,14 +107,10 @@ def predict_image(image):
         landmarks = normalize_landmarks(landmarks)
         input_array = landmarks.flatten().reshape(1, -1)
 
-        with st.spinner("Predicting..."):
-            prediction_probs = model.predict(input_array, verbose=0)[0]
-
-        if len(prediction_probs) != len(CLASS_NAMES) - 1:
-            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
-
+        prediction_probs = model.predict(input_array, verbose=0)[0]
         pred_index = np.argmax(prediction_probs)
         confidence = prediction_probs[pred_index]
+
         if confidence < 0.75:
             return "Could not identify hand sign", confidence, [("Could not identify hand sign", confidence)]
 
