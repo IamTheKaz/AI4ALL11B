@@ -170,7 +170,7 @@ def main():
             st.error("Failed to load image. Please try again.")
             return
 
-        letter, confidence, _ = predict_image(image)
+        letter, confidence, top_preds = predict_image(image)
         st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
         st.write(f"📐 Image shape: `{image.shape}`")
         st.write("🔍 Prediction Debug Info:")
@@ -187,6 +187,9 @@ def main():
 
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
+        st.markdown("🔝 **Top 3 Predictions:**")
+        for label, conf in top_preds:
+            st.write(f"- `{label}`: {conf:.2f}")
 
         spoken_text = "No hand sign detected" if letter == "Could not identify hand sign" else letter
         audio_buffer = speak_text(spoken_text)
