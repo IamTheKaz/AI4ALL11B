@@ -112,6 +112,11 @@ def predict_image(image):
     st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
     st.write(f"✅ Final input shape: {input_array.shape}")
 
+    if results.multi_hand_landmarks:
+        annotated = image.copy()
+        mp_drawing.draw_landmarks(annotated, results.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
+        st.image(annotated, caption="🖐️ MediaPipe Landmarks", channels="BGR")
+
     prediction_probs = model.predict(input_array)[0]
     pred_index = np.argmax(prediction_probs)
 
@@ -211,6 +216,17 @@ if uploaded_file:
             st.success("🎉 Phrase Detected: HELLO WORLD")
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
+
+    # Filter training samples for label 'L'
+    l_samples = df_landmarks[df_landmarks["label"] == "L"].drop(columns=["label", "source"])
+    l_vectors = l_samples.values
+
+    # Compute cosine similarity
+    from sklearn.metrics.pairwise import cosine_similarity
+    similarities = cosine_similarity(input_array, l_vectors)
+
+    # Show top match
+    st.markdown(f"🔍 Cosine similarity to training 'L' samples: `{similarities.max():.4f}`")
 
     if letter != "blank":
         st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
