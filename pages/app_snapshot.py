@@ -108,6 +108,12 @@ def predict_image(image):
         input_array = landmarks.flatten().reshape(1, -1)
 
         prediction_probs = model.predict(input_array, verbose=0)[0]
+
+        # 🧪 Debug: Inspect input and output
+        st.write("🧪 Normalized landmarks shape:", input_array.shape)
+        st.write("🧪 Sample input values:", input_array[0][:10])  # First 10 values
+        st.write("🧪 Prediction probabilities:", prediction_probs.tolist())
+
         pred_index = np.argmax(prediction_probs)
         confidence = prediction_probs[pred_index]
 
