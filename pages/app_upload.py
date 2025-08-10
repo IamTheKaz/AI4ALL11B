@@ -86,14 +86,20 @@ def get_finger_spread(landmarks):
 
 # 🧠 Prediction logic
 def predict_image(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=20)
-    image_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
+    image = cv2.resize(image, (224, 224))  # Match training resolution
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = hands.process(image_rgb)
+    
+    if not results.multi_hand_landmarks:
+        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
+
+    score = results.multi_handedness[0].classification[0].score
+    if score < 0.75:
+        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
     
 
     if not results.multi_hand_landmarks:
-        return "blank", 0.0, [("blank", 1.0)]
+        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
 
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
@@ -206,8 +212,11 @@ if uploaded_file:
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
 
-    st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
-    st.write(input_array)
+    if letter != "blank":
+        st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
+        st.dataframe(pd.DataFrame(input_array, columns=[f"f{i}" for i in range(input_array.shape[1])]))
+    else:
+        st.caption("⚠️ No hand detected — input vector is zero-filled.")
 
 # 🧭 Mode-switch buttons
 st.markdown("---")
