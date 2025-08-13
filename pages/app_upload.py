@@ -41,15 +41,6 @@ label_encoder = joblib.load("label_encoder.pkl")
 CLASS_NAMES = label_encoder.classes_.tolist() + ['blank', 'fallback']
 
 
-# 📦 Load zipped dataset from GitHub
-@st.cache_data
-def load_dataset():
-    url = "https://github.com/IamTheKaz/AI4ALL11B/raw/main/hand_landmarks.zip"
-    response = requests.get(url)
-    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        with z.open("hand_landmarks.csv") as f:
-            return pd.read_csv(f)
-
 df_landmarks = load_dataset()
 # 🧬 Prepare one reference sample per label
 reference_vectors = {}
