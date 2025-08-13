@@ -85,15 +85,15 @@ def predict_image(image):
     results = hands.process(image_rgb)
     
     if not results.multi_hand_landmarks:
-        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
+        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
 
     score = results.multi_handedness[0].classification[0].score
     if score < 0.75:
-        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
+        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
     
 
     if not results.multi_hand_landmarks:
-        return "blank", 0.0, [("blank", 1.0)], np.zeros((1, 64))
+        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
 
     hand_landmarks = results.multi_hand_landmarks[0]
     mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
@@ -223,7 +223,7 @@ if uploaded_file:
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
 
-    if letter != "blank":
+    if letter != "nothing":
         st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
         st.dataframe(pd.DataFrame(input_array, columns=[f"f{i}" for i in range(input_array.shape[1])]))
     else:
