@@ -31,7 +31,7 @@ st.markdown("""
 
 # 🖐️ MediaPipe setup
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.5)
+hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.3)
 mp_drawing = mp.solutions.drawing_utils
 
 # 🧠 Load model and class names
@@ -39,11 +39,11 @@ model = tf.keras.models.load_model("asl_model.h5")
 
 # 🔁 Load LabelEncoder
 label_encoder = joblib.load("scaler.pkl")
-CLASS_NAMES = label_encoder.classes_.tolist() + ['blank', 'fallback']
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['nothing']
 
 # 🔊 Speech synthesis
 def speak_text_input(letter):
-    return "No hand sign detected" if letter == "blank" else letter
+    return "No hand sign detected" if letter == "nothing" else letter
 
 def speak_text(text):
     tts = gTTS(text=text)
@@ -113,11 +113,25 @@ def predict_image(image):
     pred_index = np.argmax(prediction_probs)
 
     if pred_index >= len(CLASS_NAMES):
-        return "fallback", 0.0, [("fallback", 1.0)]
+        st.warning("⚠️ Prediction index out of bounds — returning 'nothing'")
+        return "nothing", 0.0, [("nothing", 1.0)], input_array
 
     prediction = CLASS_NAMES[pred_index]
     confidence = round(prediction_probs[pred_index], 2)
     top_3 = [(CLASS_NAMES[i], round(prediction_probs[i], 2)) for i in np.argsort(prediction_probs)[-3:][::-1]]
+
+    results = hands.process(image_rgb)
+
+    if not results.multi_hand_landmarks:
+        st.warning("⚠️ No hand landmarks detected")
+        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
+
+    score = results.multi_handedness[0].classification[0].score
+    st.write(f"🧪 Detection confidence: `{score:.2f}`")
+
+    if score < 0.3:
+        st.warning("⚠️ Hand detected but confidence too low")
+        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
 
     return prediction, confidence, top_3, input_array
 
