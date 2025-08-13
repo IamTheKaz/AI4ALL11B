@@ -40,12 +40,6 @@ model = tf.keras.models.load_model("asl_model.h5")
 label_encoder = joblib.load("label_encoder.pkl")
 CLASS_NAMES = label_encoder.classes_.tolist() + ['blank', 'fallback']
 
-# 🧬 Prepare one reference sample per label
-reference_vectors = {}
-for label in df_landmarks["label"].unique():
-    sample = df_landmarks[df_landmarks["label"] == label].drop(columns=["label"]).iloc[0]
-    reference_vectors[label] = sample.values.reshape(1, -1)
-
 # 🔊 Speech synthesis
 def speak_text_input(letter):
     return "No hand sign detected" if letter == "blank" else letter
