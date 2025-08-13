@@ -8,9 +8,6 @@ import io
 import tensorflow as tf
 from nltk.corpus import words
 import nltk
-import zipfile
-import io
-import requests
 import pandas as pd
 import joblib
 
@@ -29,17 +26,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🖐️ MediaPipe setup
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.3)
-mp_drawing = mp.solutions.drawing_utils
-
-# 🧠 Load model and class names
+# 🧠 Load model and scaler
 model = tf.keras.models.load_model("asl_model.h5")
+scaler = joblib.load("scaler.pkl")
 
-# 🔁 Load LabelEncoder
-label_encoder = joblib.load("scaler.pkl")
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['nothing']
+
+# 🖐️ MediaPipe drawing utils
+mp_drawing = mp.solutions.drawing_utils
 
 # 🔊 Speech synthesis
 def speak_text_input(letter):
@@ -55,6 +49,7 @@ def speak_text(text):
 def get_audio_download_link(audio):
     b64 = base64.b64encode(audio).decode()
     return f'<audio autoplay src="data:audio/mp3;base64,{b64}"/>'
+
 
 def normalize_landmarks(landmarks):
     WRIST_IDX = 0
@@ -80,60 +75,53 @@ def get_finger_spread(landmarks):
 
 # 🧠 Prediction logic
 def predict_image(image):
-    image = cv2.resize(image, (224, 224))  # Match training resolution
+    image = cv2.resize(image, (224, 224))  # Match training
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = hands.process(image_rgb)
     
-    if not results.multi_hand_landmarks:
+    # Single process call with training-aligned params
+    with mp.solutions.hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.7) as hands:
+        results = hands.process(image_rgb)
+    
+    if not results.multi_hand_landmarks or not results.multi_handedness:
+        st.warning("⚠️ No hand detected")
         return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
-
+    
     score = results.multi_handedness[0].classification[0].score
+    st.write(f"🧪 Detection confidence: {score:.2f}")
+    
     if score < 0.75:
+        st.warning("⚠️ Hand detected but confidence too low")
         return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
     
-
-    if not results.multi_hand_landmarks:
-        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
-
     hand_landmarks = results.multi_hand_landmarks[0]
-    mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-    normalized = normalize_landmarks(hand_landmarks.landmark)  # shape (1, 63)
-    spread = get_finger_spread(hand_landmarks.landmark)        # scalar float
-    spread_array = np.array([[spread]])                        # shape (1, 1)
-    input_array = np.hstack((normalized, spread_array))        # shape (1, 64)
-
     
-    if results.multi_hand_landmarks:
-        annotated = image.copy()
-        mp_drawing.draw_landmarks(annotated, results.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
-        st.image(annotated, caption="🖐️ MediaPipe Landmarks", channels="BGR")
-
-    prediction_probs = model.predict(input_array)[0]
+    # Draw landmarks on copy for display
+    annotated = image.copy()
+    mp_drawing.draw_landmarks(annotated, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+    st.image(annotated, caption="🖐️ MediaPipe Landmarks", channels="BGR")
+    
+    # Extract features
+    normalized = normalize_landmarks(hand_landmarks.landmark)  # (1, 63)
+    spread = get_finger_spread(hand_landmarks.landmark)
+    spread_array = np.array([[spread]])  # (1, 1)
+    input_array = np.hstack((normalized, spread_array))  # (1, 64)
+    
+    # Apply scaling (critical fix!)
+    scaled_input = scaler.transform(input_array)
+    
+    # Predict
+    prediction_probs = model.predict(scaled_input)[0]
     pred_index = np.argmax(prediction_probs)
-
+    
     if pred_index >= len(CLASS_NAMES):
         st.warning("⚠️ Prediction index out of bounds — returning 'nothing'")
         return "nothing", 0.0, [("nothing", 1.0)], input_array
-
+    
     prediction = CLASS_NAMES[pred_index]
     confidence = round(prediction_probs[pred_index], 2)
     top_3 = [(CLASS_NAMES[i], round(prediction_probs[i], 2)) for i in np.argsort(prediction_probs)[-3:][::-1]]
-
-    results = hands.process(image_rgb)
-
-    if not results.multi_hand_landmarks:
-        st.warning("⚠️ No hand landmarks detected")
-        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
-
-    score = results.multi_handedness[0].classification[0].score
-    st.write(f"🧪 Detection confidence: `{score:.2f}`")
-
-    if score < 0.3:
-        st.warning("⚠️ Hand detected but confidence too low")
-        return "nothing", 0.0, [("nothing", 1.0)], np.zeros((1, 64))
-
-    return prediction, confidence, top_3, input_array
+    
+    return prediction, confidence, top_3, input_array  # Return raw input_array for display
 
 # 🚀 Main app
 st.title("🤟 Upload ASL Detector")
@@ -201,7 +189,7 @@ if uploaded_file:
     spoken_text = speak_text_input(letter)
     st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
 
-    if letter not in ["nothing", "fallback"]:
+    if letter != "nothing":  # Simplified: Removed "fallback" since it's unused
         st.session_state.sequence.append(letter)
 
     current = ''.join(st.session_state.sequence).upper()
