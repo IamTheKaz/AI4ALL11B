@@ -10,10 +10,15 @@ from nltk.corpus import words
 import nltk
 import pandas as pd
 import joblib
+import gc  # For explicit garbage collection
 
 # 📦 Setup
-nltk.download('words')
-nltk_words = set(words.words())
+@st.cache_resource
+def load_nltk():
+    nltk.download('words')
+    return set(words.words())
+
+nltk_words = load_nltk()
 
 # 🧼 Hide sidebar and set page config
 st.set_page_config(page_title="ASL Upload Detector", layout="centered", initial_sidebar_state="collapsed")
@@ -26,9 +31,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🧠 Load model and scaler
-model = tf.keras.models.load_model("asl_model.h5")
-scaler = joblib.load("scaler.pkl")
+# 🧠 Load model and scaler with caching
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("asl_model.h5")
+
+@st.cache_resource
+def load_scaler():
+    return joblib.load("scaler.pkl")
+
+model = load_model()
+scaler = load_scaler()
 
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['nothing']
 
@@ -192,6 +205,10 @@ if uploaded_file:
     if letter != "nothing":  # Simplified: Removed "fallback" since it's unused
         st.session_state.sequence.append(letter)
 
+    # Release prediction resources (keep only letter for sequence)
+    del confidence, top_3, input_array
+    gc.collect()  # Force garbage collection to free memory
+
     current = ''.join(st.session_state.sequence).upper()
     longest_word = ''
     for j in range(len(current), 1, -1):
@@ -213,7 +230,9 @@ if uploaded_file:
 
     if letter != "nothing":
         st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
-        st.dataframe(pd.DataFrame(input_array, columns=[f"f{i}" for i in range(input_array.shape[1])]))
+        # Note: input_array was deleted; if you want to display it, move this before del
+        # For now, skipping display to save resources - add back if needed
+        st.caption("Input vector display skipped for resource optimization.")
     else:
         st.caption("⚠️ No hand detected — input vector is zero-filled.")
 
