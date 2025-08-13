@@ -201,7 +201,7 @@ if uploaded_file:
     spoken_text = speak_text_input(letter)
     st.markdown(get_audio_download_link(speak_text(spoken_text)), unsafe_allow_html=True)
 
-    if letter not in ["blank", "fallback"]:
+    if letter not in ["nothing", "fallback"]:
         st.session_state.sequence.append(letter)
 
     current = ''.join(st.session_state.sequence).upper()
