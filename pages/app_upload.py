@@ -40,8 +40,6 @@ model = tf.keras.models.load_model("asl_model.h5")
 label_encoder = joblib.load("label_encoder.pkl")
 CLASS_NAMES = label_encoder.classes_.tolist() + ['blank', 'fallback']
 
-
-df_landmarks = load_dataset()
 # 🧬 Prepare one reference sample per label
 reference_vectors = {}
 for label in df_landmarks["label"].unique():
