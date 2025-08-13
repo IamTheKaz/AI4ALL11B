@@ -36,8 +36,9 @@ mp_drawing = mp.solutions.drawing_utils
 
 # 🧠 Load model and class names
 model = tf.keras.models.load_model("asl_model.h5")
+
 # 🔁 Load LabelEncoder
-label_encoder = joblib.load("label_encoder.pkl")
+label_encoder = joblib.load("scaler.pkl")
 CLASS_NAMES = label_encoder.classes_.tolist() + ['blank', 'fallback']
 
 # 🔊 Speech synthesis
@@ -102,28 +103,7 @@ def predict_image(image):
     spread_array = np.array([[spread]])                        # shape (1, 1)
     input_array = np.hstack((normalized, spread_array))        # shape (1, 64)
 
-    # 🔍 Compare input to reference samples
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    similarities = {
-        label: cosine_similarity(input_array, ref_vec)[0][0]
-        for label, ref_vec in reference_vectors.items()
-    }
-    sorted_similarities = sorted(similarities.items(), key=lambda x: x[1], reverse=True)
-    top_sim_label, top_sim_score = sorted_similarities[0]
-
-    st.markdown(f"🧠 Closest Reference Match: `{top_sim_label}` with similarity `{top_sim_score:.4f}`")
-
-    # 📊 Show full similarity table
-    ref_df = pd.DataFrame({
-        "Label": [label for label, _ in sorted_similarities],
-        "Cosine Similarity": [round(score, 4) for _, score in sorted_similarities]
-    })
-    st.dataframe(ref_df, use_container_width=True)
-
-    st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
-    st.write(f"✅ Final input shape: {input_array.shape}")
-
+    
     if results.multi_hand_landmarks:
         annotated = image.copy()
         mp_drawing.draw_landmarks(annotated, results.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
@@ -228,14 +208,6 @@ if uploaded_file:
             st.success("🎉 Phrase Detected: HELLO WORLD")
             st.markdown(get_audio_download_link(speak_text("Hello World")), unsafe_allow_html=True)
             st.session_state.sequence = []
-
-    # Filter training samples for label 'L'
-    l_samples = df_landmarks[df_landmarks["label"] == "L"].drop(columns=["label"])
-    
-
-    from sklearn.metrics.pairwise import cosine_similarity
-    similarities = cosine_similarity(input_array, l_samples.values)
-    st.markdown(f"🔍 Cosine similarity to training 'L' samples: `{similarities.max():.4f}`")
 
     if letter != "blank":
         st.markdown("### 🧬 Input Vector (Normalized Landmarks + Finger Spread)")
