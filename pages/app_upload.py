@@ -12,14 +12,6 @@ import pandas as pd
 import joblib
 import gc  # For explicit garbage collection
 
-# 📦 Setup
-@st.cache_resource
-def load_nltk():
-    nltk.download('words')
-    return set(words.words())
-
-nltk_words = load_nltk()
-
 # 🧼 Hide sidebar and set page config
 st.set_page_config(page_title="ASL Upload Detector", layout="centered", initial_sidebar_state="collapsed")
 st.markdown("""
@@ -30,6 +22,15 @@ st.markdown("""
     .css-1d391kg { display: none; }
     </style>
 """, unsafe_allow_html=True)
+
+# 📦 Setup
+@st.cache_resource
+def load_nltk():
+    nltk.download('words')
+    return set(words.words())
+
+nltk_words = load_nltk()
+
 
 # 🧠 Load model and scaler with caching
 @st.cache_resource
