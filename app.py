@@ -145,12 +145,12 @@ def main():
     st.title("🤟 Snapshot ASL Detector")
     st.markdown("Capture a photo using your webcam to predict ASL letters. Try forming the phrase **HELLO WORLD**!")
 
-    # ✅ Mode-switch buttons
-    st.markdown("### 🧭 Switch Mode:")
-    col1 = st.columns(1)
-    with col1:
-        if st.button("🖼️ Upload Mode"):
-            st.switch_page("pages/app_upload.py")
+    # ✅ Upload-only navigation
+    st.markdown("### 🖼️ Upload Mode")
+
+    if st.button("Go to Upload Interface"):
+        st.switch_page("pages/app_upload.py")
+
 
     st.markdown("Tip: Use good lighting, hold hand steady, and position it clearly in the frame for better detection.")
 
