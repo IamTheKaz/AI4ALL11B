@@ -147,11 +147,8 @@ def main():
 
     # ✅ Mode-switch buttons
     st.markdown("### 🧭 Switch Mode:")
-    col1, col2 = st.columns(2)
+    col1 = st.columns(1)
     with col1:
-        if st.button("🎬 Live Mode"):
-            st.switch_page("pages/app_live.py")
-    with col2:
         if st.button("🖼️ Upload Mode"):
             st.switch_page("pages/app_upload.py")
 
