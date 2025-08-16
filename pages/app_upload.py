@@ -237,13 +237,9 @@ if uploaded_file:
     else:
         st.caption("⚠️ No hand detected — input vector is zero-filled.")
 
-# 🧭 Mode-switch buttons
+# 🧭 Mode-switch button
 st.markdown("---")
-st.markdown("### 🧭 Try Alternate Input Modes:")
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("📷 Snapshot Mode"):
-        st.switch_page("pages/app_snapshot.py")
-with col2:
-    if st.button("🎬 Live Mode"):
-        st.switch_page("app.py")
+st.markdown("### 🧭 Switch to Snapshot Mode:")
+
+if st.button("📷 Snapshot Mode"):
+    st.switch_page("pages/app_snapshot.py")

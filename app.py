@@ -148,7 +148,7 @@ def main():
     # ✅ Upload-only navigation
     st.markdown("### 🖼️ Upload Mode")
 
-    if st.button("Go to Upload Interface"):
+    if st.button("Upload Mode"):
         st.switch_page("pages/app_upload.py")
 
 
