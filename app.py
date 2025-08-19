@@ -121,12 +121,11 @@ scaler = joblib.load("scaler.pkl")
 
 
 # 🧠 Prediction logic with normalization
-def predict_image(image):
+def predict_image(image, results):
     try:
         image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        results = mp_hands_instance.process(image_rgb)
         if not results.multi_hand_landmarks:
             st.warning("🚫 No hand landmarks detected.")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
@@ -168,6 +167,10 @@ def predict_image(image):
 
         if input_array.shape[1] != 71:
             st.warning(f"🚫 Input shape mismatch: expected 71, got {input_array.shape[1]}")
+            return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
+
+        if not results.multi_hand_landmarks:
+            st.warning("🚫 No hand landmarks detected.")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
         prediction_probs = model.predict(input_array_scaled)[0]
@@ -212,7 +215,6 @@ def main():
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             results = mp_hands_instance.process(image_rgb)
 
-            results = mp_hands_instance.process(image_rgb)
             st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
             st.image(image_rgb, caption="🖼️ Enhanced Image for Detection", channels="RGB")
 
@@ -220,7 +222,7 @@ def main():
             st.error("Failed to load image. Please try again.")
             return
 
-        letter, confidence, top_preds = predict_image(image)
+        letter, confidence, top_preds = predict_image(image, results)
         
         if letter == 'nothing':
             letter = "No hand sign detected"
