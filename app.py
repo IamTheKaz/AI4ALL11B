@@ -57,7 +57,7 @@ def load_model():
         st.stop()
 
 model = load_model()
-CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['blank', 'Could not identify hand sign']
+CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['nothing']
 
 # 🔊 Speech synthesis
 def speak_text(text):
@@ -91,12 +91,28 @@ def normalize_landmarks(landmarks):
         [0,               0,              1]
     ])
     points = points @ rot_matrix.T
-    return points.flatten().reshape(1, -1)
+    return points  # Return 21x3 array
 
 def get_finger_spread(landmarks):
     # Index tip (8), middle tip (12), ring tip (16)
     x_vals = [landmark.x for landmark in [landmarks[8], landmarks[12], landmarks[16]]]
     return max(x_vals) - min(x_vals)
+
+def get_angle(v1, v2):
+    dot = np.dot(v1, v2)
+    norm1 = np.linalg.norm(v1)
+    norm2 = np.linalg.norm(v2)
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    cos_theta = dot / (norm1 * norm2)
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    return np.arccos(cos_theta)  # Angle in radians
+
+def get_finger_curvature(points, finger_joints):
+    # finger_joints: list of indices [base, joint1, joint2, tip]
+    straight_dist = np.linalg.norm(points[finger_joints[3]] - points[finger_joints[0]])
+    path_length = sum(np.linalg.norm(points[finger_joints[i+1]] - points[finger_joints[i]]) for i in range(3))
+    return straight_dist / path_length if path_length > 0 else 1.0
 
 # 🧠 Prediction logic with normalization
 def predict_image(image):
@@ -117,14 +133,31 @@ def predict_image(image):
             st.warning(f"🚫 Unexpected landmark shape: {landmarks_raw.shape}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        # ✅ Feature engineering (fixed)
-        normalized = normalize_landmarks(hand_landmarks.landmark)  # shape (1, 63)
-        spread = get_finger_spread(hand_landmarks.landmark)        # scalar float
+              # ✅ Feature engineering (updated for 71 features)
+              normalized_array = normalize_landmarks(hand_landmarks.landmark)  # 21x3 array
+              normalized_flat = normalized_array.flatten()  # 63 values
+              spread = get_finger_spread(hand_landmarks.landmark)  # scalar
 
-        spread_array = np.array([[spread]])                        # shape (1, 1)
-        input_array = np.hstack((normalized, spread_array))        # shape (1, 64)
+              # Compute angles using normalized vectors (tips: thumb=4, index=8, middle=12)
+              v_thumb = normalized_array[4]
+              v_index = normalized_array[8]
+              v_middle = normalized_array[12]
+              angle_thumb_index = get_angle(v_thumb, v_index)
+              angle_index_middle = get_angle(v_index, v_middle)
 
-        if input_array.shape[1] != 64:
+              # Compute curvatures
+              curv_thumb = get_finger_curvature(normalized_array, [1,2,3,4])
+              curv_index = get_finger_curvature(normalized_array, [5,6,7,8])
+              curv_middle = get_finger_curvature(normalized_array, [9,10,11,12])
+              curv_ring = get_finger_curvature(normalized_array, [13,14,15,16])
+              curv_pinky = get_finger_curvature(normalized_array, [17,18,19,20])
+              curvatures = [curv_thumb, curv_index, curv_middle, curv_ring, curv_pinky]
+
+              # Combine all features
+              features = np.concatenate([normalized_flat, [spread, angle_thumb_index, angle_index_middle], curvatures])
+              input_array = features.reshape(1, -1)  # shape (1, 71)
+
+        if input_array.shape[1] != 71:
             st.warning(f"🚫 Input shape mismatch: expected 64, got {input_array.shape[1]}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
@@ -180,6 +213,10 @@ def main():
             return
 
         letter, confidence, top_preds = predict_image(image)
+        
+        if letter == 'nothing':
+            letter = "No hand sign detected"
+
         st.image(image, caption="📷 Snapshot Image", channels="BGR", use_column_width=True)
         st.write(f"📐 Image shape: `{image.shape}`")
         st.write("🔍 Prediction Debug Info:")
@@ -190,9 +227,23 @@ def main():
             results = mp_hands_instance.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             if results.multi_hand_landmarks:
                 hand_landmarks = results.multi_hand_landmarks[0]
-                landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark]).flatten()
-                st.write("🧠 Hand landmarks (flattened):")
-                st.write(landmarks.tolist())
+                # Compute full features instead of just flattened coords
+                normalized_array = normalize_landmarks(hand_landmarks.landmark)
+                normalized_flat = normalized_array.flatten()
+                spread = get_finger_spread(hand_landmarks.landmark)
+                v_thumb = normalized_array[4]
+                v_index = normalized_array[8]
+                v_middle = normalized_array[12]
+                angle_thumb_index = get_angle(v_thumb, v_index)
+                angle_index_middle = get_angle(v_index, v_middle)
+                curv_thumb = get_finger_curvature(normalized_array, [1,2,3,4])
+                curv_index = get_finger_curvature(normalized_array, [5,6,7,8])
+                curv_middle = get_finger_curvature(normalized_array, [9,10,11,12])
+                curv_ring = get_finger_curvature(normalized_array, [13,14,15,16])
+                curv_pinky = get_finger_curvature(normalized_array, [17,18,19,20])
+                full_features = np.concatenate([normalized_flat, [spread, angle_thumb_index, angle_index_middle], [curv_thumb, curv_index, curv_middle, curv_ring, curv_pinky]])
+                st.write("🧠 Full input features (71 values):")
+                st.write(full_features.tolist())
 
         st.image(image, caption=f"🖼️ Prediction: `{letter.upper()}`", channels="BGR")
         st.markdown(f"### ✅ Letter: `{letter.upper()}` — Confidence: `{confidence:.2f}`")
