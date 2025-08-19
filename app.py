@@ -209,9 +209,8 @@ def main():
             image = cv2.imread(tmp_file.name)
 
             st.image(image, caption="📷 Raw Input Image", channels="BGR")
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=20)
-            image_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = mp_hands_instance.process(image_rgb)
 
             results = mp_hands_instance.process(image_rgb)
             st.write(f"🧪 MediaPipe result: `{results.multi_hand_landmarks}`")
