@@ -133,29 +133,29 @@ def predict_image(image):
             st.warning(f"🚫 Unexpected landmark shape: {landmarks_raw.shape}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-              # ✅ Feature engineering (updated for 71 features)
-              normalized_array = normalize_landmarks(hand_landmarks.landmark)  # 21x3 array
-              normalized_flat = normalized_array.flatten()  # 63 values
-              spread = get_finger_spread(hand_landmarks.landmark)  # scalar
+        # ✅ Feature engineering (updated for 71 features)
+        normalized_array = normalize_landmarks(hand_landmarks.landmark)  # 21x3 array
+        normalized_flat = normalized_array.flatten()  # 63 values
+        spread = get_finger_spread(hand_landmarks.landmark)  # scalar
 
-              # Compute angles using normalized vectors (tips: thumb=4, index=8, middle=12)
-              v_thumb = normalized_array[4]
-              v_index = normalized_array[8]
-              v_middle = normalized_array[12]
-              angle_thumb_index = get_angle(v_thumb, v_index)
-              angle_index_middle = get_angle(v_index, v_middle)
+        # Compute angles using normalized vectors (tips: thumb=4, index=8, middle=12)
+        v_thumb = normalized_array[4]
+        v_index = normalized_array[8]
+        v_middle = normalized_array[12]
+        angle_thumb_index = get_angle(v_thumb, v_index)
+        angle_index_middle = get_angle(v_index, v_middle)
 
-              # Compute curvatures
-              curv_thumb = get_finger_curvature(normalized_array, [1,2,3,4])
-              curv_index = get_finger_curvature(normalized_array, [5,6,7,8])
-              curv_middle = get_finger_curvature(normalized_array, [9,10,11,12])
-              curv_ring = get_finger_curvature(normalized_array, [13,14,15,16])
-              curv_pinky = get_finger_curvature(normalized_array, [17,18,19,20])
-              curvatures = [curv_thumb, curv_index, curv_middle, curv_ring, curv_pinky]
+        # Compute curvatures
+        curv_thumb = get_finger_curvature(normalized_array, [1,2,3,4])
+        curv_index = get_finger_curvature(normalized_array, [5,6,7,8])
+        curv_middle = get_finger_curvature(normalized_array, [9,10,11,12])
+        curv_ring = get_finger_curvature(normalized_array, [13,14,15,16])
+        curv_pinky = get_finger_curvature(normalized_array, [17,18,19,20])
+        curvatures = [curv_thumb, curv_index, curv_middle, curv_ring, curv_pinky]
 
-              # Combine all features
-              features = np.concatenate([normalized_flat, [spread, angle_thumb_index, angle_index_middle], curvatures])
-              input_array = features.reshape(1, -1)  # shape (1, 71)
+        # Combine all features
+        features = np.concatenate([normalized_flat, [spread, angle_thumb_index, angle_index_middle], curvatures])
+        input_array = features.reshape(1, -1)  # shape (1, 71)
 
         if input_array.shape[1] != 71:
             st.warning(f"🚫 Input shape mismatch: expected 64, got {input_array.shape[1]}")
