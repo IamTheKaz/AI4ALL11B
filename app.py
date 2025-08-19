@@ -127,6 +127,7 @@ def predict_image(image, results):
     try:
         image = cv2.resize(image, (IMG_SIZE, IMG_SIZE))
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.flip(image, 1)  # Flip horizontally to correct mirror effect
 
         if not results.multi_hand_landmarks:
             st.warning("🚫 No hand landmarks detected.")
