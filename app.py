@@ -61,6 +61,8 @@ def load_model():
 model = load_model()
 CLASS_NAMES = [chr(i) for i in range(65, 91)] + ['nothing']
 
+st.write(f"🧪 Model input shape: {model.input_shape}")
+
 # 🔊 Speech synthesis
 def speak_text(text):
     try:
