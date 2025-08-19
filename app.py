@@ -10,7 +10,7 @@ from PIL import Image
 import tempfile
 from nltk.corpus import words
 import nltk
-import pickle
+import joblib
 
 
 # 🧼 Hide sidebar and set page config
@@ -116,8 +116,8 @@ def get_finger_curvature(points, finger_joints):
     path_length = sum(np.linalg.norm(points[finger_joints[i+1]] - points[finger_joints[i]]) for i in range(3))
     return straight_dist / path_length if path_length > 0 else 1.0
 
-with open("scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
+scaler = joblib.load("scaler.pkl")
+
 
 
 # 🧠 Prediction logic with normalization
