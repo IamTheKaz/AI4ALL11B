@@ -10,6 +10,8 @@ from PIL import Image
 import tempfile
 from nltk.corpus import words
 import nltk
+import pickle
+
 
 # 🧼 Hide sidebar and set page config
 st.set_page_config(page_title="ASL Snapshot Detector", layout="centered", initial_sidebar_state="collapsed")
@@ -114,6 +116,10 @@ def get_finger_curvature(points, finger_joints):
     path_length = sum(np.linalg.norm(points[finger_joints[i+1]] - points[finger_joints[i]]) for i in range(3))
     return straight_dist / path_length if path_length > 0 else 1.0
 
+with open("models/scaler.pkl", "rb") as f:
+    scaler = pickle.load(f)
+
+
 # 🧠 Prediction logic with normalization
 def predict_image(image):
     try:
@@ -157,11 +163,14 @@ def predict_image(image):
         features = np.concatenate([normalized_flat, [spread, angle_thumb_index, angle_index_middle], curvatures])
         input_array = features.reshape(1, -1)  # shape (1, 71)
 
+        # Scale the input features
+        input_array_scaled = scaler.transform(input_array)
+
         if input_array.shape[1] != 71:
-            st.warning(f"🚫 Input shape mismatch: expected 64, got {input_array.shape[1]}")
+            st.warning(f"🚫 Input shape mismatch: expected 71, got {input_array.shape[1]}")
             return "Could not identify hand sign", 0.0, [("Could not identify hand sign", 1.0)]
 
-        prediction_probs = model.predict(input_array, verbose=0)[0]
+        prediction_probs = model.predict(input_array_scaled)[0]
 
         top_indices = prediction_probs.argsort()[-3:][::-1]
         top_preds = [(CLASS_NAMES[i], prediction_probs[i]) for i in top_indices]
