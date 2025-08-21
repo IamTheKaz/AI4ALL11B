@@ -11,6 +11,7 @@ import tempfile
 from nltk.corpus import words
 import nltk
 import joblib
+import pickle
 
 
 # 🧼 Hide sidebar and set page config
