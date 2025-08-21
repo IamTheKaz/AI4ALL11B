@@ -112,7 +112,7 @@ def get_audio_player(audio_data):
     """Create HTML audio player"""
     if audio_data:
         b64 = base64.b64encode(audio_data).decode()
-        return f'<audio controls><source src="data:audio/mp3;base64,{b64}" type="audio/mpeg"></audio>'
+        return f'<audio autoplay src="data:audio/mp3;base64,{b64}"></audio>'
     return ""
 
 # Feature extraction functions (same as training)
@@ -416,11 +416,48 @@ def main():
                             st.session_state.prediction_history.pop()
                         st.rerun()
             
-            with col3:
-                if st.button("🔊 Speak Sequence"):
+            if sequence_str:
+                if 'last_spoken' not in st.session_state or st.session_state.last_spoken != sequence_str:
                     audio_data = speak_text(sequence_str)
                     if audio_data:
                         st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
+                        st.session_state.last_spoken = sequence_str
+
+            # 🥚 HELLO WORLD Easter Egg
+            target_sequence = ['H', 'E', 'L', 'L', 'O', 'W', 'O', 'R', 'L', 'D']
+            if len(st.session_state.sequence) >= len(target_sequence):
+                recent = st.session_state.sequence[-len(target_sequence):]
+                if all(r == t for r, t in zip(recent, target_sequence)):
+                    st.success("🎉 Phrase Detected: HELLO WORLD")
+        
+                    if 'last_spoken' not in st.session_state or st.session_state.last_spoken != "HELLO WORLD":
+                        audio_data = speak_text("Hello World")
+                        if audio_data:
+                            st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
+                            st.session_state.last_spoken = "HELLO WORLD"
+        
+                    # Reset sequence to avoid repeat triggers
+                    st.session_state.sequence = []
+                    st.session_state.prediction_history = []
+                    st.rerun()
+
+            # 🧠 Extract longest valid word from sequence
+            current = ''.join([l.upper() for l in st.session_state.sequence])
+            longest_word = max(
+                (word for j in range(len(current), 1, -1)
+                for word in [current[-j:]] if word in nltk_words),
+                key=len, default=''
+            )
+
+            # 🔊 Speak longest word automatically
+            if longest_word:
+                if 'last_spoken' not in st.session_state or st.session_state.last_spoken != longest_word:
+                    audio_data = speak_text(longest_word)
+                    if audio_data:
+                        st.markdown(f"🗣 Detected Word: **{longest_word}**")
+                        st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
+                        st.session_state.last_spoken = longest_word
+
 
         # Debug info (collapsible)
         with st.expander("🔧 Debug Information"):
