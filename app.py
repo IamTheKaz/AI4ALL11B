@@ -335,8 +335,7 @@ def main():
     # Initialize session state
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
-    if 'prediction_history' not in st.session_state:
-        st.session_state.prediction_history = []
+    
 
     st.markdown("---")
     st.subheader("📸 Capture ASL Letter")
@@ -392,7 +391,6 @@ def main():
         if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
             if st.button(f"➕ Add '{result['prediction'].upper()}' to sequence"):
                 st.session_state.sequence.append(result['prediction'].upper())
-                st.session_state.prediction_history.append(result)
                 st.success(f"Added {result['prediction'].upper()} to sequence!")
         
         # Display current sequence
