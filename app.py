@@ -469,5 +469,10 @@ def main():
                 'detection_confidence': results.multi_handedness[0].classification[0].score if results.multi_handedness else 'N/A'
             })
 
+MAX_SEQUENCE = 20
+st.session_state.sequence.append(result['prediction'].upper())
+if len(st.session_state.sequence) > MAX_SEQUENCE:
+    st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
+
 if __name__ == "__main__":
     main()
