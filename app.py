@@ -426,7 +426,7 @@ def main():
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
             
             # Debug Mode: Alphabet Testing
-            if st.session_state.debug_mode:
+            if webcam_image and st.session_state.debug_mode:
                 st.markdown("---")
                 test = st.session_state.alphabet_test
                 expected = test['expected_letter']
