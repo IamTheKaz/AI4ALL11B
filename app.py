@@ -283,24 +283,37 @@ def deployment_prediction(image, results):
             'message': f'Prediction error: {str(e)}'
         }
 
-def display_prediction_results(result, show_landmarks=False):
+def display_prediction_results(result, show_landmarks=False, debug_mode=False, expected_letter=None):
     """Display prediction results with appropriate styling - Simplified"""
     
     status = result['status']
     prediction = result['prediction']
     confidence = result['confidence']
     
-    # Status-based styling
-    if status == 'high_confidence':
-        st.success(f"🎯 **{prediction.upper()}** (Confidence: {confidence:.1%})")
-    elif status == 'medium_confidence':
-        st.warning(f"🤔 **{prediction.upper()}** (Confidence: {confidence:.1%})")
-    elif status in ['low_confidence', 'very_low_confidence']:
-        st.error(f"❌ **{prediction.upper()}** (Confidence: {confidence:.1%})")
-    elif status == 'no_hand_detected':
-        st.info("👋 No hand detected - make sure your hand is visible")
+    # Debug mode: Color coding based on correctness
+    if debug_mode and expected_letter:
+        is_correct = (prediction.upper() == expected_letter.upper())
+        if status == 'no_hand_detected':
+            st.error(f"❌ **NO HAND DETECTED** (Expected: {expected_letter})")
+        elif prediction == 'nothing':
+            st.error(f"❌ **NOTHING** (Expected: {expected_letter})")
+        elif is_correct:
+            st.success(f"✅ **{prediction.upper()}** (Confidence: {confidence:.1%}) - CORRECT!")
+        else:
+            st.error(f"❌ **{prediction.upper()}** (Confidence: {confidence:.1%}) - Expected: {expected_letter}")
     else:
-        st.error(f"⚠️ {result['message']}")
+        # Normal mode: Status-based styling
+        if status == 'high_confidence':
+            st.success(f"🎯 **{prediction.upper()}** (Confidence: {confidence:.1%})")
+        elif status == 'medium_confidence':
+            st.warning(f"🤔 **{prediction.upper()}** (Confidence: {confidence:.1%})")
+        elif status in ['low_confidence', 'very_low_confidence']:
+            # Show low confidence predictions in red
+            st.error(f"🔴 **{prediction.upper()}** (Confidence: {confidence:.1%}) - LOW CONFIDENCE")
+        elif status == 'no_hand_detected':
+            st.info("👋 No hand detected - make sure your hand is visible")
+        else:
+            st.error(f"⚠️ {result['message']}")
     
     # Show only top prediction unless debugging
     if show_landmarks and len(result['top_predictions']) > 1:
@@ -318,9 +331,36 @@ def main():
     st.title("🤟 ASL Letter Detector")
     st.markdown("**Capture photos to detect ASL letters**")
 
+    # Debug mode toggle
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("")
+    with col2:
+        debug_toggle = st.checkbox("🔬 Alphabet Test Mode", value=st.session_state.debug_mode)
+        if debug_toggle != st.session_state.debug_mode:
+            st.session_state.debug_mode = debug_toggle
+            if debug_toggle:
+                # Reset alphabet test when entering debug mode
+                st.session_state.alphabet_test = {
+                    'expected_letter': 'A',
+                    'current_index': 0,
+                    'results': {},
+                    'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                }
+            st.rerun()
+
     # Initialize session state - minimal
     if 'sequence' not in st.session_state:
         st.session_state.sequence = []
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = False
+    if 'alphabet_test' not in st.session_state:
+        st.session_state.alphabet_test = {
+            'expected_letter': 'A',
+            'current_index': 0,
+            'results': {},
+            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        }
 
     # Tips section - collapsed by default
     with st.expander("💡 Tips for Better Recognition"):
@@ -361,7 +401,12 @@ def main():
                 st.image(image_flipped, caption="📷 Captured Image", channels="RGB", width=300)
             
             with col2:
-                display_prediction_results(result)
+                # Debug mode: Show expected letter and pass to display function
+                if st.session_state.debug_mode:
+                    expected = st.session_state.alphabet_test['expected_letter']
+                    display_prediction_results(result, debug_mode=True, expected_letter=expected)
+                else:
+                    display_prediction_results(result)
                 
                 # Show confidence meter
                 if result['prediction'] != 'nothing':
@@ -373,35 +418,111 @@ def main():
                 if audio_data:
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
             
-            # Automatic sequence addition for confident predictions
-            MAX_SEQUENCE = 15  # Reduced from 20
-            
-            # Letters that are commonly duplicated in words - allow immediate duplicates
-            DUPLICATE_ALLOWED = {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
-            
-            if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
-                current_letter = result['prediction'].upper()
-                should_add = True
+            # Debug Mode: Alphabet Testing
+            if st.session_state.debug_mode:
+                st.markdown("---")
+                test = st.session_state.alphabet_test
+                expected = test['expected_letter']
+                current_idx = test['current_index']
                 
-                # Check if we should prevent duplicate
-                if ('last_prediction' in st.session_state and 
-                    st.session_state.last_prediction == current_letter and 
-                    current_letter not in DUPLICATE_ALLOWED):
-                    should_add = False
-                    st.info(f"Duplicate prevented: {current_letter}")
+                # Update test results
+                if result['prediction'] != 'nothing' or result['status'] == 'no_hand_detected':
+                    test['results'][expected] = {
+                        'predicted': result['prediction'],
+                        'confidence': result['confidence'],
+                        'status': result['status'],
+                        'correct': result['prediction'].upper() == expected.upper()
+                    }
+                    
+                    # Auto-advance to next letter
+                    if current_idx < 25:  # 0-25 for A-Z
+                        test['current_index'] += 1
+                        test['expected_letter'] = test['alphabet'][test['current_index']]
+                        st.rerun()
                 
-                if should_add:
-                    st.session_state.sequence.append(current_letter)
-                    if len(st.session_state.sequence) > MAX_SEQUENCE:
-                        st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
-                    st.session_state.last_prediction = current_letter
+                # Display progress
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.markdown(f"### 🎯 **Sign Letter: {expected}** ({current_idx + 1}/26)")
+                with col2:
+                    if st.button("⏭️ Skip"):
+                        if current_idx < 25:
+                            test['current_index'] += 1
+                            test['expected_letter'] = test['alphabet'][test['current_index']]
+                            st.rerun()
+                with col3:
+                    if st.button("🔄 Reset Test"):
+                        st.session_state.alphabet_test = {
+                            'expected_letter': 'A',
+                            'current_index': 0,
+                            'results': {},
+                            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                        }
+                        st.rerun()
+                
+                # Display alphabet progress with color coding
+                st.markdown("**📊 Alphabet Progress:**")
+                alphabet_display = []
+                for i, letter in enumerate(test['alphabet']):
+                    if letter in test['results']:
+                        if test['results'][letter]['correct']:
+                            alphabet_display.append(f"🟢**{letter}**")
+                        else:
+                            alphabet_display.append(f"🔴**{letter}**")
+                    elif i == current_idx:
+                        alphabet_display.append(f"🟡**{letter}**")  # Current
+                    else:
+                        alphabet_display.append(f"⚪{letter}")  # Not tested yet
+                
+                st.markdown(" ".join(alphabet_display))
+                
+                # Show detailed results
+                if test['results']:
+                    with st.expander("📋 Detailed Results"):
+                        for letter in test['alphabet']:
+                            if letter in test['results']:
+                                r = test['results'][letter]
+                                status_icon = "✅" if r['correct'] else "❌"
+                                st.markdown(f"{status_icon} **{letter}**: {r['predicted']} ({r['confidence']:.1%}, {r['status']})")
+                
+                # Summary stats
+                if test['results']:
+                    total_tested = len(test['results'])
+                    correct = sum(1 for r in test['results'].values() if r['correct'])
+                    accuracy = (correct / total_tested) * 100 if total_tested > 0 else 0
+                    st.markdown(f"**Accuracy: {accuracy:.1f}% ({correct}/{total_tested})**")
+            
+            else:
+                # Normal Mode: Automatic sequence addition
+                MAX_SEQUENCE = 15
+                
+                # Letters that are commonly duplicated in words - allow immediate duplicates
+                DUPLICATE_ALLOWED = {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
+                
+                if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
+                    current_letter = result['prediction'].upper()
+                    should_add = True
                     
-                    # Print the letter that was added
-                    st.success(f"✅ Added: **{current_letter}**")
+                    # Check if we should prevent duplicate
+                    if ('last_prediction' in st.session_state and 
+                        st.session_state.last_prediction == current_letter and 
+                        current_letter not in DUPLICATE_ALLOWED):
+                        should_add = False
+                        st.info(f"Duplicate prevented: {current_letter}")
                     
-                   
-            # Display sequence
-            if st.session_state.sequence:
+                    if should_add:
+                        st.session_state.sequence.append(current_letter)
+                        if len(st.session_state.sequence) > MAX_SEQUENCE:
+                            st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
+                        st.session_state.last_prediction = current_letter
+                        
+                        # Print the letter that was added
+                        st.success(f"✅ Added: **{current_letter}**")
+                        
+                
+            
+            # Display sequence (only in normal mode)
+            if st.session_state.sequence and not st.session_state.debug_mode:
                 st.markdown("---")
                 sequence_str = " ".join(st.session_state.sequence)
                 st.markdown(f"**📝 Sequence:** {sequence_str}")
