@@ -373,6 +373,65 @@ def main():
 
     st.markdown("---")
     
+    # Debug Mode: Show alphabet test interface even without image
+    if st.session_state.debug_mode:
+        st.markdown("### 🔬 Alphabet Test Mode")
+        test = st.session_state.alphabet_test
+        expected = test['expected_letter']
+        current_idx = test['current_index']
+        
+        # Display current target
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"### 🎯 **Sign Letter: {expected}** ({current_idx + 1}/26)")
+        with col2:
+            if st.button("⏭️ Skip"):
+                if current_idx < 25:
+                    test['current_index'] += 1
+                    test['expected_letter'] = test['alphabet'][test['current_index']]
+                st.rerun()
+        with col3:
+            if st.button("🔄 Reset Test"):
+                st.session_state.alphabet_test = {
+                    'expected_letter': 'A',
+                    'current_index': 0,
+                    'results': {},
+                    'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                }
+                st.rerun()
+        
+        # Display alphabet progress with color coding
+        st.markdown("**📊 Alphabet Progress:**")
+        alphabet_display = []
+        for i, letter in enumerate(test['alphabet']):
+            if letter in test['results']:
+                if test['results'][letter]['correct']:
+                    alphabet_display.append(f"🟢**{letter}**")
+                else:
+                    alphabet_display.append(f"🔴**{letter}**")
+            elif i == current_idx:
+                alphabet_display.append(f"🟡**{letter}**")  # Current
+            else:
+                alphabet_display.append(f"⚪{letter}")  # Not tested yet
+        
+        st.markdown(" ".join(alphabet_display))
+        
+        # Show detailed results
+        if test['results']:
+            with st.expander("📋 Detailed Results"):
+                for letter in test['alphabet']:
+                    if letter in test['results']:
+                        r = test['results'][letter]
+                        status_icon = "✅" if r['correct'] else "❌"
+                        st.markdown(f"{status_icon} **{letter}**: {r['predicted']} ({r['confidence']:.1%}, {r['status']})")
+        
+        # Summary stats
+        if test['results']:
+            total_tested = len(test['results'])
+            correct = sum(1 for r in test['results'].values() if r['correct'])
+            accuracy = (correct / total_tested) * 100 if total_tested > 0 else 0
+            st.markdown(f"**Accuracy: {accuracy:.1f}% ({correct}/{total_tested})**")
+    
     webcam_image = st.camera_input("📸 Capture ASL Letter")
 
     if webcam_image:
@@ -420,79 +479,30 @@ def main():
                 if audio_data:
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
             
-            # Debug Mode: Alphabet Testing
+            # Debug Mode: Update alphabet test results when photo is taken
             if st.session_state.debug_mode:
-                st.markdown("---")
                 test = st.session_state.alphabet_test
                 expected = test['expected_letter']
                 current_idx = test['current_index']
                 
-                # Update test results
+                # Update test results ONLY if we have a real prediction
                 if result['prediction'] != 'nothing' or result['status'] == 'no_hand_detected':
-                    test['results'][expected] = {
-                        'predicted': result['prediction'],
-                        'confidence': result['confidence'],
-                        'status': result['status'],
-                        'correct': result['prediction'].upper() == expected.upper()
-                    }
+                    # Always record results for duplicate-allowed letters like O
+                    can_duplicate = expected in {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
                     
-                    # Auto-advance to next letter
-                    if current_idx < 25:  # 0-25 for A-Z
-                        test['current_index'] += 1
-                        test['expected_letter'] = test['alphabet'][test['current_index']]
-                        st.rerun()
-                
-                # Display progress
-                col1, col2, col3 = st.columns([2, 1, 1])
-                with col1:
-                    st.markdown(f"### 🎯 **Sign Letter: {expected}** ({current_idx + 1}/26)")
-                with col2:
-                    if st.button("⏭️ Skip"):
-                        if current_idx < 25:
+                    if expected not in test['results'] or can_duplicate:
+                        test['results'][expected] = {
+                            'predicted': result['prediction'],
+                            'confidence': result['confidence'],
+                            'status': result['status'],
+                            'correct': result['prediction'].upper() == expected.upper()
+                        }
+                        
+                        # Auto-advance to next letter
+                        if current_idx < 25:  # 0-25 for A-Z
                             test['current_index'] += 1
                             test['expected_letter'] = test['alphabet'][test['current_index']]
                             st.rerun()
-                with col3:
-                    if st.button("🔄 Reset Test"):
-                        st.session_state.alphabet_test = {
-                            'expected_letter': 'A',
-                            'current_index': 0,
-                            'results': {},
-                            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-                        }
-                        st.rerun()
-                
-                # Display alphabet progress with color coding
-                st.markdown("**📊 Alphabet Progress:**")
-                alphabet_display = []
-                for i, letter in enumerate(test['alphabet']):
-                    if letter in test['results']:
-                        if test['results'][letter]['correct']:
-                            alphabet_display.append(f"🟢**{letter}**")
-                        else:
-                            alphabet_display.append(f"🔴**{letter}**")
-                    elif i == current_idx:
-                        alphabet_display.append(f"🟡**{letter}**")  # Current
-                    else:
-                        alphabet_display.append(f"⚪{letter}")  # Not tested yet
-                
-                st.markdown(" ".join(alphabet_display))
-                
-                # Show detailed results
-                if test['results']:
-                    with st.expander("📋 Detailed Results"):
-                        for letter in test['alphabet']:
-                            if letter in test['results']:
-                                r = test['results'][letter]
-                                status_icon = "✅" if r['correct'] else "❌"
-                                st.markdown(f"{status_icon} **{letter}**: {r['predicted']} ({r['confidence']:.1%}, {r['status']})")
-                
-                # Summary stats
-                if test['results']:
-                    total_tested = len(test['results'])
-                    correct = sum(1 for r in test['results'].values() if r['correct'])
-                    accuracy = (correct / total_tested) * 100 if total_tested > 0 else 0
-                    st.markdown(f"**Accuracy: {accuracy:.1f}% ({correct}/{total_tested})**")
             
             else:
                 # Normal Mode: Automatic sequence addition
@@ -505,8 +515,9 @@ def main():
                     current_letter = result['prediction'].upper()
                     should_add = True
                     
-                    # Check if we should prevent duplicate
-                    if ('last_prediction' in st.session_state and 
+                    # Check if we should prevent duplicate (skip this check if in debug mode)
+                    if (not st.session_state.debug_mode and 
+                        'last_prediction' in st.session_state and 
                         st.session_state.last_prediction == current_letter and 
                         current_letter not in DUPLICATE_ALLOWED):
                         should_add = False
