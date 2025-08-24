@@ -373,14 +373,41 @@ def main():
                 if audio_data:
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
             
-            # Sequence management - simplified
+            # Automatic sequence addition for confident predictions
             MAX_SEQUENCE = 15  # Reduced from 20
+            
+            # Letters that are commonly duplicated in words - allow immediate duplicates
+            DUPLICATE_ALLOWED = {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
+            
             if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
-                if st.button(f"➕ Add '{result['prediction'].upper()}' to sequence"):
-                    st.session_state.sequence.append(result['prediction'].upper())
+                current_letter = result['prediction'].upper()
+                should_add = True
+                
+                # Check if we should prevent duplicate
+                if ('last_prediction' in st.session_state and 
+                    st.session_state.last_prediction == current_letter and 
+                    current_letter not in DUPLICATE_ALLOWED):
+                    should_add = False
+                    st.info(f"Duplicate prevented: {current_letter}")
+                
+                if should_add:
+                    st.session_state.sequence.append(current_letter)
                     if len(st.session_state.sequence) > MAX_SEQUENCE:
                         st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
-                    st.success(f"Added {result['prediction'].upper()}!")
+                    st.session_state.last_prediction = current_letter
+                    
+                    # Print the letter that was added
+                    st.success(f"✅ Added: **{current_letter}**")
+                    
+            # Always display current sequence prominently
+            if st.session_state.sequence:
+                sequence_str = "".join(st.session_state.sequence)  # No spaces between letters
+                st.markdown("---")
+                st.markdown(f"### 📝 Current Sequence: **{sequence_str}**")
+                
+                # Also show with spaces for readability
+                spaced_sequence = " ".join(st.session_state.sequence)
+                st.markdown(f"*({spaced_sequence})*")
             
             # Display sequence
             if st.session_state.sequence:
@@ -392,13 +419,24 @@ def main():
                 with col1:
                     if st.button("🗑️ Clear"):
                         st.session_state.sequence = []
+                        if 'last_prediction' in st.session_state:
+                            del st.session_state.last_prediction
+                        if 'last_word' in st.session_state:
+                            del st.session_state.last_word
+                        if 'duplicate_count' in st.session_state:
+                            del st.session_state.duplicate_count
                         st.rerun()
                 
                 with col2:
                     if st.button("⬅️ Remove Last"):
                         if st.session_state.sequence:
                             st.session_state.sequence.pop()
-                            st.rerun()
+                            # Reset duplicate tracking
+                            if 'last_prediction' in st.session_state:
+                                del st.session_state.last_prediction
+                            if 'duplicate_count' in st.session_state:
+                                del st.session_state.duplicate_count
+                        st.rerun()
                 
                 # Word detection - only for longer sequences
                 if len(st.session_state.sequence) >= 3:
