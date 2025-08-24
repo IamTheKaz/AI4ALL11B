@@ -399,16 +399,7 @@ def main():
                     # Print the letter that was added
                     st.success(f"✅ Added: **{current_letter}**")
                     
-            # Always display current sequence prominently
-            if st.session_state.sequence:
-                sequence_str = "".join(st.session_state.sequence)  # No spaces between letters
-                st.markdown("---")
-                st.markdown(f"### 📝 Current Sequence: **{sequence_str}**")
-                
-                # Also show with spaces for readability
-                spaced_sequence = " ".join(st.session_state.sequence)
-                st.markdown(f"*({spaced_sequence})*")
-            
+                   
             # Display sequence
             if st.session_state.sequence:
                 st.markdown("---")
