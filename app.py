@@ -101,7 +101,7 @@ if actual_input_shape != expected_features:
 CONFIDENCE_THRESHOLDS = {
     'high': 0.75,      # Lowered from 0.85
     'medium': 0.55,    # Lowered from 0.65  
-    'low': 0.35        # Lowered from 0.45
+    'low': 0.40        # Lowered from 0.35 - speak at 40%+
 }
 
 # 🔊 Speech synthesis - Cached and optimized
@@ -412,8 +412,10 @@ def main():
                 if result['prediction'] != 'nothing':
                     st.progress(result['confidence'])
             
-            # Text-to-speech for confident predictions only
-            if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
+            # Text-to-speech for confident predictions (lowered threshold to 40%)
+            if (result['prediction'] != 'nothing' and 
+                result['confidence'] >= 0.40 and  # Speak at 40%+ confidence
+                result['status'] in ['high_confidence', 'medium_confidence', 'low_confidence']):
                 audio_data = speak_text(result['prediction'])
                 if audio_data:
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
@@ -499,7 +501,7 @@ def main():
                 # Letters that are commonly duplicated in words - allow immediate duplicates
                 DUPLICATE_ALLOWED = {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
                 
-                if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
+                if result['status'] in ['high_confidence', 'medium_confidence', 'low_confidence'] and result['prediction'] != 'nothing':
                     current_letter = result['prediction'].upper()
                     should_add = True
                     
