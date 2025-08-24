@@ -331,6 +331,19 @@ def main():
     st.title("🤟 ASL Letter Detector")
     st.markdown("**Capture photos to detect ASL letters**")
 
+    # ✅ Initialize session state BEFORE using it
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = False
+    if 'sequence' not in st.session_state:
+        st.session_state.sequence = []
+    if 'alphabet_test' not in st.session_state:
+        st.session_state.alphabet_test = {
+            'expected_letter': 'A',
+            'current_index': 0,
+            'results': {},
+            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        }
+
     # Debug mode toggle
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -339,14 +352,6 @@ def main():
         debug_toggle = st.checkbox("🔬 Alphabet Test Mode", value=st.session_state.debug_mode)
         if debug_toggle != st.session_state.debug_mode:
             st.session_state.debug_mode = debug_toggle
-            if debug_toggle:
-                # Reset alphabet test when entering debug mode
-                st.session_state.alphabet_test = {
-                    'expected_letter': 'A',
-                    'current_index': 0,
-                    'results': {},
-                    'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-                }
             st.rerun()
 
     # Initialize session state - minimal
