@@ -440,12 +440,15 @@ def main():
                         'status': result['status'],
                         'correct': result['prediction'].upper() == expected.upper()
                     }
-                    
-                    # Auto-advance to next letter
-                    if current_idx < 25:  # 0-25 for A-Z
-                        test['current_index'] += 1
-                        test['expected_letter'] = test['alphabet'][test['current_index']]
-                        st.rerun()
+
+                # ✅ Always auto-advance after attempt
+                if current_idx < 25:
+                    test['current_index'] += 1
+                    test['expected_letter'] = test['alphabet'][test['current_index']]
+                else:
+                    test['expected_letter'] = None  # Optional: signal end of test
+
+                st.rerun()
                 
                 # Display progress
                 col1, col2, col3 = st.columns([2, 1, 1])
