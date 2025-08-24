@@ -331,19 +331,6 @@ def main():
     st.title("🤟 ASL Letter Detector")
     st.markdown("**Capture photos to detect ASL letters**")
 
-    # ✅ Initialize session state BEFORE using it
-    if 'debug_mode' not in st.session_state:
-        st.session_state.debug_mode = False
-    if 'sequence' not in st.session_state:
-        st.session_state.sequence = []
-    if 'alphabet_test' not in st.session_state:
-        st.session_state.alphabet_test = {
-            'expected_letter': 'A',
-            'current_index': 0,
-            'results': {},
-            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-        }
-
     # Debug mode toggle
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -352,6 +339,14 @@ def main():
         debug_toggle = st.checkbox("🔬 Alphabet Test Mode", value=st.session_state.debug_mode)
         if debug_toggle != st.session_state.debug_mode:
             st.session_state.debug_mode = debug_toggle
+            if debug_toggle:
+                # Reset alphabet test when entering debug mode
+                st.session_state.alphabet_test = {
+                    'expected_letter': 'A',
+                    'current_index': 0,
+                    'results': {},
+                    'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                }
             st.rerun()
 
     # Initialize session state - minimal
@@ -425,40 +420,27 @@ def main():
                 if audio_data:
                     st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
             
-            # ✅ Confidence-gated advancement with Try Again button
-            CONFIDENCE_THRESHOLD = 0.40
-            test = st.session_state.alphabet_test
-            expected = test['expected_letter']
-            current_idx = test['current_index']
-            prediction = result.get('prediction')
-            confidence = result.get('confidence', 0.0)
-
-            # Update test results if prediction was attempted
-            if prediction != 'nothing' or result['status'] == 'no_hand_detected':
-                test['results'][expected] = {
-                'predicted': prediction,
-                'confidence': confidence,
-                'status': result['status'],
-                'correct': prediction.upper() == expected.upper()
-            }
-
-            # Check if user clicked "Try Again"
-            if st.session_state.get("retry_letter", False):
-                st.toast(f"Retrying letter: {expected}", icon="🔁")
-                st.session_state.retry_letter = False  # Reset flag
-                st.rerun()
-
-            # Only advance if confidence is high enough OR prediction is 'nothing'
-            elif confidence >= CONFIDENCE_THRESHOLD or prediction == 'nothing':
-                if current_idx < 25:
-                    test['current_index'] += 1
-                    test['expected_letter'] = test['alphabet'][test['current_index']]
-                else:
-                    test['expected_letter'] = None  # End of test
-                st.rerun()
-            else:
-                st.warning(f"Prediction too uncertain ({confidence:.1%}). Try again.")
-                st.toast("Retrying due to low confidence", icon="⚠️")
+            # Debug Mode: Alphabet Testing
+            if st.session_state.debug_mode:
+                st.markdown("---")
+                test = st.session_state.alphabet_test
+                expected = test['expected_letter']
+                current_idx = test['current_index']
+                
+                # Update test results
+                if result['prediction'] != 'nothing' or result['status'] == 'no_hand_detected':
+                    test['results'][expected] = {
+                        'predicted': result['prediction'],
+                        'confidence': result['confidence'],
+                        'status': result['status'],
+                        'correct': result['prediction'].upper() == expected.upper()
+                    }
+                    
+                    # Auto-advance to next letter
+                    if current_idx < 25:  # 0-25 for A-Z
+                        test['current_index'] += 1
+                        test['expected_letter'] = test['alphabet'][test['current_index']]
+                        st.rerun()
                 
                 # Display progress
                 col1, col2, col3 = st.columns([2, 1, 1])
@@ -478,10 +460,6 @@ def main():
                             'results': {},
                             'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
                         }
-
-
-                    if st.button("🔁 Try Again"):
-                        st.session_state.retry_letter = True
                         st.rerun()
                 
                 # Display alphabet progress with color coding
