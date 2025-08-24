@@ -283,7 +283,7 @@ def display_prediction_results(result, image_with_landmarks=None):
         st.warning(f"🤔 **{prediction.upper()}** (Confidence: {confidence:.1%})")
         st.markdown("⚠️ Medium confidence - try adjusting hand position")
     elif status in ['low_confidence', 'very_low_confidence']:
-        st.error(f"❓ **{prediction.upper()}** (Confidence: {confidence:.1%})")
+        st.error(f"❌ **{prediction.upper()}** (Confidence: {confidence:.1%})")
         st.markdown("🔄 Low confidence - please try again with better positioning")
     elif status == 'no_hand_detected':
         st.info("👋 No hand detected")
@@ -302,7 +302,7 @@ def display_prediction_results(result, image_with_landmarks=None):
     
     # Display enhanced image if available
     if image_with_landmarks is not None:
-        st.image(image_with_landmarks, caption="📍 Hand landmarks detected", channels="RGB")
+        st.image(image_with_landmarks, caption="🔍 Hand landmarks detected", channels="RGB")
     
     return result
 
@@ -387,10 +387,14 @@ def main():
                 st.markdown("🔊 **Audio:**")
                 st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
         
-        # Add to sequence if confident enough
+        # Add to sequence if confident enough - with MAX_SEQUENCE limit
+        MAX_SEQUENCE = 20
         if result['status'] in ['high_confidence', 'medium_confidence'] and result['prediction'] != 'nothing':
             if st.button(f"➕ Add '{result['prediction'].upper()}' to sequence"):
                 st.session_state.sequence.append(result['prediction'].upper())
+                # Keep sequence under limit
+                if len(st.session_state.sequence) > MAX_SEQUENCE:
+                    st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
                 st.success(f"Added {result['prediction'].upper()} to sequence!")
         
         # Display current sequence
@@ -404,15 +408,12 @@ def main():
             with col1:
                 if st.button("🗑️ Clear Sequence"):
                     st.session_state.sequence = []
-                    st.session_state.prediction_history = []
                     st.rerun()
             
             with col2:
                 if st.button("⬅️ Remove Last"):
                     if st.session_state.sequence:
                         st.session_state.sequence.pop()
-                        if st.session_state.prediction_history:
-                            st.session_state.prediction_history.pop()
                         st.rerun()
             
             if sequence_str:
@@ -437,7 +438,6 @@ def main():
         
                     # Reset sequence to avoid repeat triggers
                     st.session_state.sequence = []
-                    st.session_state.prediction_history = []
                     st.rerun()
 
             # 🧠 Extract longest valid word from sequence
@@ -469,10 +469,6 @@ def main():
                 'detection_confidence': results.multi_handedness[0].classification[0].score if results.multi_handedness else 'N/A'
             })
 
-MAX_SEQUENCE = 20
-st.session_state.sequence.append(result['prediction'].upper())
-if len(st.session_state.sequence) > MAX_SEQUENCE:
-    st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
 
 if __name__ == "__main__":
     main()
