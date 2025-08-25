@@ -14,7 +14,7 @@ import joblib
 import pickle
 import gc
 
-# 🧼 Hide sidebar and set page config
+# Hide sidebar and set page config
 st.set_page_config(page_title="ASL Snapshot Detector", layout="centered", initial_sidebar_state="collapsed")
 st.markdown("""
     <style>
@@ -25,7 +25,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 📦 Setup - Optimized loading
+# Setup - Optimized loading
 @st.cache_data
 def load_nltk_words():
     try:
@@ -40,7 +40,7 @@ def get_nltk_words():
         st.session_state.nltk_words = load_nltk_words()
     return st.session_state.nltk_words
 
-# 🖐️ MediaPipe setup - More conservative settings
+# MediaPipe setup - More conservative settings
 @st.cache_resource
 def init_mediapipe():
     try:
@@ -62,7 +62,7 @@ mp_hands_instance, mp_drawing, HAND_CONNECTIONS = init_mediapipe()
 
 IMG_SIZE = 224
 
-# 🧠 Load model, scaler, and label encoder - Optimized
+# Load model, scaler, and label encoder - Optimized
 @st.cache_resource
 def load_model_artifacts():
     try:
@@ -97,14 +97,14 @@ if actual_input_shape != expected_features:
     st.error(f"Model expects {actual_input_shape} features, but code generates {expected_features}")
     st.stop()
 
-# 🎯 Adjusted confidence thresholds for better accuracy
+# Adjusted confidence thresholds for better accuracy
 CONFIDENCE_THRESHOLDS = {
     'high': 0.75,      # Lowered from 0.85
     'medium': 0.55,    # Lowered from 0.65  
     'low': 0.40        # Lowered from 0.35 - speak at 40%+
 }
 
-# 🔊 Speech synthesis - Cached and optimized
+# Speech synthesis - Cached and optimized
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def speak_text(text):
     """Cached TTS to avoid regenerating same audio"""
@@ -294,13 +294,13 @@ def display_prediction_results(result, show_landmarks=False, debug_mode=False, e
     if debug_mode and expected_letter:
         is_correct = (prediction.upper() == expected_letter.upper())
         if status == 'no_hand_detected':
-            st.error(f"❌ **NO HAND DETECTED** (Expected: {expected_letter})")
+            st.error(f"⌘ **NO HAND DETECTED** (Expected: {expected_letter})")
         elif prediction == 'nothing':
-            st.error(f"❌ **NOTHING** (Expected: {expected_letter})")
+            st.error(f"⌘ **NOTHING** (Expected: {expected_letter})")
         elif is_correct:
             st.success(f"✅ **{prediction.upper()}** (Confidence: {confidence:.1%}) - CORRECT!")
         else:
-            st.error(f"❌ **{prediction.upper()}** (Confidence: {confidence:.1%}) - Expected: {expected_letter}")
+            st.error(f"⌘ **{prediction.upper()}** (Confidence: {confidence:.1%}) - Expected: {expected_letter}")
     else:
         # Normal mode: Status-based styling
         if status == 'high_confidence':
@@ -326,12 +326,12 @@ def display_prediction_results(result, show_landmarks=False, debug_mode=False, e
     
     return result
 
-# 🚀 Main app - Streamlined
+# Main app - Streamlined
 def main():
     st.title("🤟 ASL Letter Detector")
     st.markdown("**Capture photos to detect ASL letters**")
 
-    # ✅ Initialize session state BEFORE using it
+    # Initialize session state BEFORE using it
     if 'debug_mode' not in st.session_state:
         st.session_state.debug_mode = False
     if 'sequence' not in st.session_state:
@@ -353,19 +353,6 @@ def main():
         if debug_toggle != st.session_state.debug_mode:
             st.session_state.debug_mode = debug_toggle
             st.rerun()
-
-    # Initialize session state - minimal
-    if 'sequence' not in st.session_state:
-        st.session_state.sequence = []
-    if 'debug_mode' not in st.session_state:
-        st.session_state.debug_mode = False
-    if 'alphabet_test' not in st.session_state:
-        st.session_state.alphabet_test = {
-            'expected_letter': 'A',
-            'current_index': 0,
-            'results': {},
-            'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-        }
 
     # Tips section - collapsed by default
     with st.expander("💡 Tips for Better Recognition"):
@@ -432,34 +419,18 @@ def main():
                 expected = test['expected_letter']
                 current_idx = test['current_index']
                 
-                # Update test results
-                if result['prediction'] != 'nothing' or result['status'] == 'no_hand_detected':
-                    test['results'][expected] = {
-                        'predicted': result['prediction'],
-                        'confidence': result['confidence'],
-                        'status': result['status'],
-                        'correct': result['prediction'].upper() == expected.upper()
-                    }
-
-                # ✅ Always auto-advance after attempt
-                if current_idx < 25:
-                    test['current_index'] += 1
-                    test['expected_letter'] = test['alphabet'][test['current_index']]
-                else:
-                    test['expected_letter'] = None  # Optional: signal end of test
-
-                st.rerun()
-                
-                # Display progress
+                # Display current target and controls
                 col1, col2, col3 = st.columns([2, 1, 1])
                 with col1:
-                    st.markdown(f"### 🎯 **Sign Letter: {expected}** ({current_idx + 1}/26)")
+                    if current_idx < 26:
+                        st.markdown(f"### 🎯 **Sign Letter: {expected}** ({current_idx + 1}/26)")
+                    else:
+                        st.markdown("### 🎉 **Alphabet Test Complete!**")
                 with col2:
-                    if st.button("⏭️ Skip"):
-                        if current_idx < 25:
-                            test['current_index'] += 1
-                            test['expected_letter'] = test['alphabet'][test['current_index']]
-                            st.rerun()
+                    if st.button("⭐ Skip") and current_idx < 25:
+                        test['current_index'] += 1
+                        test['expected_letter'] = test['alphabet'][test['current_index']]
+                        st.rerun()
                 with col3:
                     if st.button("🔄 Reset Test"):
                         st.session_state.alphabet_test = {
@@ -468,7 +439,46 @@ def main():
                             'results': {},
                             'alphabet': list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
                         }
+                        # Reset processed results too
+                        if 'processed_results' in st.session_state:
+                            del st.session_state.processed_results
                         st.rerun()
+                
+                # Only process results and advance if we haven't completed the test
+                if current_idx < 26:
+                    # Record results for the current letter
+                    if result['prediction'] != 'nothing' or result['status'] == 'no_hand_detected':
+                        # Check if this is a new result (prevent multiple recordings from same capture)
+                        result_key = f"{expected}_{current_idx}"
+                        if result_key not in st.session_state.get('processed_results', set()):
+                            # Initialize processed_results if it doesn't exist
+                            if 'processed_results' not in st.session_state:
+                                st.session_state.processed_results = set()
+                            
+                            # Record the result
+                            test['results'][expected] = {
+                                'predicted': result['prediction'],
+                                'confidence': result['confidence'],
+                                'status': result['status'],
+                                'correct': result['prediction'].upper() == expected.upper()
+                            }
+                            
+                            # Mark this result as processed
+                            st.session_state.processed_results.add(result_key)
+                            
+                            # Show immediate feedback
+                            if result['prediction'].upper() == expected.upper():
+                                st.success(f"✅ Correct: {expected}")
+                            elif result['status'] == 'no_hand_detected':
+                                st.warning(f"⚠️ No hand detected for {expected}")
+                            else:
+                                st.error(f"❌ Got {result['prediction']} for {expected}")
+                            
+                            # Auto-advance to next letter
+                            if current_idx < 25:
+                                test['current_index'] += 1
+                                test['expected_letter'] = test['alphabet'][test['current_index']]
+                                # Don't call st.rerun() here - let natural flow handle the update
                 
                 # Display alphabet progress with color coding
                 st.markdown("**📊 Alphabet Progress:**")
@@ -484,7 +494,11 @@ def main():
                     else:
                         alphabet_display.append(f"⚪{letter}")  # Not tested yet
                 
-                st.markdown(" ".join(alphabet_display))
+                # Display in two rows for better formatting
+                row1 = alphabet_display[:13]
+                row2 = alphabet_display[13:]
+                st.markdown(" ".join(row1))
+                st.markdown(" ".join(row2))
                 
                 # Show detailed results
                 if test['results']:
