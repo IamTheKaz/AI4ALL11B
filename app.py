@@ -365,6 +365,9 @@ def main():
 
     st.markdown("---")
     
+    # Instructions for capture methods
+    st.info("💡 **Two ways to capture:** Click the camera button OR press SPACEBAR/ENTER to capture while signing with your dominant hand")
+    
     webcam_image = st.camera_input("📸 Capture ASL Letter")
 
     if webcam_image:
@@ -378,10 +381,9 @@ def main():
                 st.error("Failed to load image. Please try again.")
                 return
 
-            # Process image - simplified
+            # Process image - simplified (removed flip)
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image_flipped = cv2.flip(image_rgb, 1)
-            results = mp_hands_instance.process(image_flipped)
+            results = mp_hands_instance.process(image_rgb)
             
             # Make prediction
             result = deployment_prediction(image, results)
@@ -390,7 +392,7 @@ def main():
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.image(image_flipped, caption="📷 Captured Image", channels="RGB", width=300)
+                st.image(image_rgb, caption="📷 Captured Image", channels="RGB", width=300)
             
             with col2:
                 # Debug mode: Show expected letter and pass to display function
@@ -605,7 +607,7 @@ def main():
                                 st.session_state.last_word = longest_word
 
             # Force cleanup
-            del image, image_rgb, image_flipped, results
+            del image, image_rgb, results
             gc.collect()
             
         except Exception as e:
