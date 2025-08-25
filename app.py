@@ -365,8 +365,8 @@ def main():
 
     st.markdown("---")
     
-    # Instructions for capture methods
-    st.info("💡 **Two ways to capture:** Click the camera button OR press SPACEBAR/ENTER to capture while signing with your dominant hand")
+    # Instructions for optimal signing
+    st.info("💡 **For best results:** Use your non-dominant hand to click 'Take Photo' so you can sign with your dominant right hand (matches training data)")
     
     webcam_image = st.camera_input("📸 Capture ASL Letter")
 
