@@ -91,8 +91,6 @@ actual_input_shape = model.input_shape[1] if len(model.input_shape) > 1 else mod
 if actual_input_shape != expected_features:
     st.error(f"Model expects {actual_input_shape} features, but code generates {expected_features}")
     st.stop()
-else:
-    st.info(f"Model expects {expected_features} features (enhanced feature set)")
 
 # Adjusted confidence thresholds
 CONFIDENCE_THRESHOLDS = {
