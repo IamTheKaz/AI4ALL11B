@@ -681,3 +681,83 @@ def main():
                     correct = sum(1 for r in test['results'].values() if r['correct'])
                     accuracy = (correct / total_tested) * 100 if total_tested > 0 else 0
                     st.markdown(f"**Accuracy: {accuracy:.1f}% ({correct}/{total_tested})**")
+            
+            else:
+                # Normal Mode: Sequence building
+                MAX_SEQUENCE = 15
+                DUPLICATE_ALLOWED = {'L', 'S', 'T', 'E', 'F', 'O', 'R', 'M', 'N', 'P'}
+                
+                if result['status'] in ['high_confidence', 'medium_confidence', 'low_confidence'] and result['prediction'] != 'nothing':
+                    current_letter = result['prediction'].upper()
+                    should_add = True
+                    
+                    if ('last_prediction' in st.session_state and 
+                        st.session_state.last_prediction == current_letter and 
+                        current_letter not in DUPLICATE_ALLOWED):
+                        should_add = False
+                        st.info(f"Duplicate prevented: {current_letter}")
+                    
+                    if should_add:
+                        st.session_state.sequence.append(current_letter)
+                        if len(st.session_state.sequence) > MAX_SEQUENCE:
+                            st.session_state.sequence = st.session_state.sequence[-MAX_SEQUENCE:]
+                        st.session_state.last_prediction = current_letter
+                        st.success(f"Added: **{current_letter}**")
+                
+                # Display sequence
+                if st.session_state.sequence:
+                    sequence_str = "".join(st.session_state.sequence)
+                    st.markdown("---")
+                    st.markdown(f"### Current Sequence: **{sequence_str}**")
+                    spaced_sequence = " ".join(st.session_state.sequence)
+                    st.markdown(f"*({spaced_sequence})*")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Clear"):
+                            st.session_state.sequence = []
+                            if 'last_prediction' in st.session_state:
+                                del st.session_state.last_prediction
+                            if 'last_word' in st.session_state:
+                                del st.session_state.last_word
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button("Remove Last"):
+                            if st.session_state.sequence:
+                                st.session_state.sequence.pop()
+                                if 'last_prediction' in st.session_state:
+                                    del st.session_state.last_prediction
+                            st.rerun()
+                    
+                    # Word detection
+                    if len(st.session_state.sequence) >= 3:
+                        nltk_words = get_nltk_words()
+                        current = ''.join(st.session_state.sequence).upper()
+                        longest_word = ""
+                        
+                        check_length = min(10, len(current))
+                        for j in range(check_length, 2, -1):
+                            word = current[-j:]
+                            if word.lower() in nltk_words and len(word) > len(longest_word):
+                                longest_word = word
+                                break
+                        
+                        if longest_word and len(longest_word) >= 3:
+                            st.success(f"Word Detected: **{longest_word}**")
+                            if 'last_word' not in st.session_state or st.session_state.last_word != longest_word:
+                                audio_data = speak_text(longest_word)
+                                if audio_data:
+                                    st.markdown(get_audio_player(audio_data), unsafe_allow_html=True)
+                                    st.session_state.last_word = longest_word
+
+            # Cleanup
+            del image, image_rgb, results
+            gc.collect()
+            
+        except Exception as e:
+            st.error(f"Processing error: {e}")
+            gc.collect()
+
+if __name__ == "__main__":
+    main()
