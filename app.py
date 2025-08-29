@@ -503,8 +503,7 @@ def display_prediction_results(result, show_landmarks=False, debug_mode=False, e
 # Main app - Updated for enhanced features
 def main():
     st.title("🤟 Enhanced ASL Letter Detector")
-    st.markdown("**Capture photos to detect ASL letters - Now with enhanced feature recognition!**")
-    st.info(f"✨ Using enhanced feature set with {expected_features} features for improved accuracy")
+    st.markdown("**Capture photos to detect ASL letters**")
 
     # Initialize session state
     if 'debug_mode' not in st.session_state:
