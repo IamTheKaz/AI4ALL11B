@@ -65,7 +65,7 @@ IMG_SIZE = 224
 @st.cache_resource
 def load_model_artifacts():
     try:
-        model = tf.keras.models.load_model("asl_model_improved.h5", compile=False)  # Updated model name
+        model = tf.keras.models.load_model("asl_model.h5", compile=False)  # Updated model name
         scaler = joblib.load("scaler.pkl")
         
         try:
