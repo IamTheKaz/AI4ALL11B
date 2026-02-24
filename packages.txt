@@ -1,5 +1,6 @@
 ffmpeg
-libopencv-dev
+libgl1-mesa-glx
+libglib2.0-0
 libavformat-dev
 libavcodec-dev
 libavutil-dev
