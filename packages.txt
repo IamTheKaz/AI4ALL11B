@@ -1,6 +1,4 @@
 ffmpeg
 libgl1
-libglib2.0-0
-libavformat-dev
-libavcodec-dev
-libavutil-dev
+libglib2.0-0t64
+
